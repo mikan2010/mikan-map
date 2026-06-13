@@ -977,21 +977,28 @@ function buildDataTag(){
   const meta=(window.MIKAN_META||{});
   const ds=DATASETS[state.dsIdx]||{};
   const yr=(ds.years&&ds.years.length)?`${ds.years[0]}〜${ds.years[ds.years.length-1]}`:"";
-  const fv=meta.filters?Object.values(meta.filters).filter((v,i,a)=>a.indexOf(v)===i):[];
-  const src=meta.source||"農林水産省「作物統計調査」（政府統計の総合窓口 e-Stat）";
-  const tabs=Array.isArray(meta.tables)?meta.tables:[];
-  const ids=Array.isArray(meta.stats_ids)?meta.stats_ids:[];
+  const fvObj=ds.filters||null;
+  const fv=fvObj?Object.values(fvObj).filter((v,i,a)=>a.indexOf(v)===i):[];
+  const src=ds.source||meta.source||"政府統計の総合窓口 e-Stat";
+  const tabs=Array.isArray(ds.tables)?ds.tables:(Array.isArray(meta.tables)?meta.tables:[]);
+  const ids=Array.isArray(ds.stats_ids)?ds.stats_ids:(Array.isArray(meta.stats_ids)?meta.stats_ids:[]);
+  const gen=ds.generated||meta.generated;
   let h=`<b>出典・データについて</b>`;
   h+=`<div style="margin-top:4px">統計データ: ${esc(src)}。 対象: ${esc(ds.name||"—")}${yr?`（${esc(yr)}）`:""}${fv.length?`／抽出: ${esc(fv.join(" / "))}`:""}。</div>`;
   if(tabs.length){
-    let li=tabs.map(t=>`<li><a href="${estatUrl(t.id)}" target="_blank" rel="noopener">${esc(t.title||t.id)}</a>（統計表ID ${esc(t.id)}${t.period?`／${esc(t.period)}`:""}）</li>`).join("");
-    h+=`<details style="margin-top:4px"><summary style="cursor:pointer">使用した統計表（${tabs.length}件・クリックで展開）</summary>`+
+    let li=tabs.map(t=>{
+      const id=String(t.id||""); const isId=/^[0-9]{8,}$/.test(id);
+      const head=isId?`<a href="${estatUrl(id)}" target="_blank" rel="noopener">${esc(t.title||id)}</a>`:esc(t.title||id);
+      const idpart=isId?`統計表ID ${esc(id)}`:`ファイル ${esc(id)}`;
+      return `<li>${head}（${idpart}${t.period?`／${esc(t.period)}`:""}）</li>`;
+    }).join("");
+    h+=`<details style="margin-top:4px"><summary style="cursor:pointer">使用した統計表・ファイル（${tabs.length}件・クリックで展開）</summary>`+
        `<ul style="margin:6px 0 0;padding-left:18px;line-height:1.6">${li}</ul></details>`;
   }else if(ids.length){
     let li=ids.map(id=>`<a href="${estatUrl(id)}" target="_blank" rel="noopener">${esc(id)}</a>`).join("、 ");
     h+=`<div style="margin-top:4px">使用した統計表ID（${ids.length}件）: ${li}</div>`;
   }
-  if(meta.generated) h+=`<div class="quiet" style="margin-top:4px">データ生成日: ${esc(meta.generated)}。数値は上記統計表をプログラムで取得・整形した加工値で、原数値は各IDで確認できます。</div>`;
+  if(gen) h+=`<div class="quiet" style="margin-top:4px">データ生成日: ${esc(gen)}。数値は出典をプログラムで取得・整形した加工値で、原数値は出典で確認できます。</div>`;
   h+=`<div class="quiet" style="margin-top:4px">地図境界: <a href="https://github.com/dataofjapan/land" target="_blank" rel="noopener">dataofjapan/land</a>（地球地図日本／国土地理院）。ブランド産地マーカー: 公開情報に基づく参考表示。</div>`;
   el.innerHTML=h;
 }

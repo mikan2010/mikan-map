@@ -37,6 +37,10 @@ API_DATA = BASE + "/getStatsData"
 API_LIST = BASE + "/getStatsList"
 CROP_STATS_CODE = "00500215"
 
+# 指標(measures)プリセット: (キー, 表示名, 照合語)。--all-measures で一括取得
+MEASURE_PRESETS = [("harvest", "収穫量", "収穫量"), ("ship", "出荷量", "出荷量"),
+                   ("area", "結果樹面積", "面積"), ("yield", "10a当たり収量", "収量")]
+
 PREF = ["", "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
         "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
         "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県",
@@ -113,7 +117,9 @@ def _clean_value(s):
 
 
 def search_tables(app_id, word, stats_code, limit=100):
-    params = {"appId": app_id, "searchWord": word, "limit": limit}
+    params = {"appId": app_id, "limit": limit}
+    if word:
+        params["searchWord"] = word
     if stats_code:
         params["statsCode"] = stats_code
     r = requests.get(API_LIST, params=params, timeout=60)
@@ -259,7 +265,8 @@ def _passes(rec, filters):
 def main():
     ap = argparse.ArgumentParser(description="e-Stat 統計表 → みかんマップ用データ")
     ap.add_argument("--search")
-    ap.add_argument("--stats-code", default=CROP_STATS_CODE)
+    ap.add_argument("--stats-code", default=CROP_STATS_CODE,
+                    help="検索対象の政府統計コード。作物統計=00500215(既定)／特産果樹生産動態等調査=00500503／all で全統計横断")
     ap.add_argument("--stats-id", action="append")
     ap.add_argument("--app-id", default=os.environ.get("ESTAT_APP_ID"))
     ap.add_argument("--cd-cat01"); ap.add_argument("--cd-cat02")
@@ -269,6 +276,8 @@ def main():
     ap.add_argument("--name", default="取得データ")
     ap.add_argument("--key", default=None)
     ap.add_argument("--measure-label", default="収穫量")
+    ap.add_argument("--all-measures", action="store_true", help="収穫量・出荷量・結果樹面積・10a当たり収量をまとめて取り込む")
+    ap.add_argument("--measure", action="append", default=[], help="指標を key=日本語名 で指定（例 ship=出荷量）。複数可")
     ap.add_argument("--suffix", default="")  # e-Statの年ラベルは既に「2016年」等を含むため既定は空
     ap.add_argument("--note", default="")
     ap.add_argument("--out", default="estat_pref_map.json")
@@ -279,7 +288,11 @@ def main():
     if not a.app_id:
         sys.exit("appId を --app-id か 環境変数 ESTAT_APP_ID で指定してください。")
     if a.search:
-        print_search(search_tables(a.app_id, a.search, a.stats_code))
+        sc = None if a.stats_code in ("all", "ALL", "-", "0", "") else a.stats_code
+        word = None if a.search in ("*", "all", "ALL", "-") else a.search
+        if word is None and sc is None:
+            sys.exit("全件一覧には --stats-code（例 00500503）を指定してください。")
+        print_search(search_tables(a.app_id, word, sc))
         return
     if not a.stats_id:
         sys.exit("--stats-id を1つ以上指定してください（--search で探せます）。")
@@ -295,20 +308,43 @@ def main():
         if "=" in item:
             did, code = item.split("=", 1)
             explicit[did.strip()] = code.strip()
-    picks = a.pick if a.pick else ([] if a.filter else ["収穫量"])
+    # ---- 取り込む指標(measures)を決定 ----
+    if a.measure:
+        measures = []
+        for spec in a.measure:
+            if "=" in spec:
+                k, jp = spec.split("=", 1)
+                measures.append((k.strip(), jp.strip(), jp.strip()))
+    elif a.all_measures:
+        measures = list(MEASURE_PRESETS)
+    else:
+        measures = [("harvest", a.measure_label, a.measure_label)]
+    mterms = [t for _, _, t in measures]
 
-    combined_series, combined_national, order, unit = {}, {}, {}, ""
+    # 品目など（指標語は除く）の絞り込み
+    base_picks = [p for p in a.pick if not any(t in p for t in mterms)]
+
+    mdata = {k: {} for k, _, _ in measures}
+    mnat = {k: {} for k, _, _ in measures}
+    munit = {k: "" for k, _, _ in measures}
+    order = {}
     all_records, area_id, time_id = [], None, None
-    warn = {}   # dim_name -> set(values)
-    zero_tables = []
-    tables_meta = []      # 使用した統計表の正式名称など（出典表示用）
-    providers = []        # (提供機関, 調査名) の重複なしリスト
-    used_filters = {}
+    warn, zero_tables, tables_meta, providers, used_filters = {}, [], [], [], {}
+
+    def find_measure_dim(name_maps, aid, tid, skip):
+        best, bdid = 0, None
+        for did, codes in name_maps.items():
+            if did in (aid, tid) or did in skip:
+                continue
+            c = sum(1 for nm in codes.values() if any(t in (nm or "") for t in mterms))
+            if c > best:
+                best, bdid = c, did
+        return bdid if best >= 1 else None
 
     for sid in a.stats_id:
         class_obj, values, table_inf = fetch_raw(a.app_id, sid, extra)
         p = parse(class_obj, values)
-        fy = survey_year(table_inf)  # 年次次元が無い表の年を補完
+        fy = survey_year(table_inf)
         ti = table_inf or {}
         ttl = (_text(ti.get("STATISTICS_NAME")) + " / " + _text(ti.get("TITLE"))).strip(" /")
         tables_meta.append({"id": sid, "title": ttl, "period": _text(ti.get("SURVEY_DATE"))})
@@ -318,52 +354,76 @@ def main():
         all_records.extend(p["records"])
         area_id = area_id or p["area_id"]
         time_id = time_id or p["time_id"]
-        npref = sum(1 for r in p["records"] if r["pref_id"] is not None)
-        if npref == 0:
+        if sum(1 for r in p["records"] if r["pref_id"] is not None) == 0:
             sample = []
             if p["area_id"]:
                 sample = ["{}={}".format(c, n) for c, n in list(p["name_maps"].get(p["area_id"], {}).items())[:4]]
             zero_tables.append((sid, list(p["dims"].values()), sample))
 
-        # この表に対する絞り込みを解決
-        filt = {did: code for did, code in explicit.items() if did in p["name_maps"]}
-        filt.update(resolve_picks(picks, p["name_maps"], p["area_id"], p["time_id"]))
-        used_filters.update({p["dims"].get(k, k): p["name_maps"].get(k, {}).get(v, v) for k, v in filt.items()})
+        # 品目等の絞り込み（表ごとに解決）
+        base = {did: code for did, code in explicit.items() if did in p["name_maps"]}
+        base.update(resolve_picks(base_picks, p["name_maps"], p["area_id"], p["time_id"]))
+        used_filters.update({p["dims"].get(k, k): p["name_maps"].get(k, {}).get(v, v) for k, v in base.items()})
 
-        # 未指定で値が複数残る次元 → 警告候補
+        # 指標(表章)次元と、指標→コード対応を特定
+        tab = find_measure_dim(p["name_maps"], p["area_id"], p["time_id"], set(base))
+        mcode = {}
+        if tab:
+            for k, _lab, term in measures:
+                for code, nm in p["name_maps"][tab].items():
+                    if term in (nm or ""):
+                        mcode[k] = code
+                        break
+        rev = {code: k for k, code in mcode.items()}
+
+        # 未指定で複数値が残る次元の警告（area/time/絞り込み/指標次元は除外）
+        skip = set(base) | ({tab} if tab else set()) | {p["area_id"], p["time_id"]}
         present = {}
         for r in p["records"]:
             for did in p["name_maps"]:
-                if did in (p["area_id"], p["time_id"]) or did in filt:
+                if did in skip:
                     continue
                 c = r.get(did, {}).get("code")
                 if c is not None:
                     present.setdefault(did, set()).add(c)
         for did, codes in present.items():
             if len(codes) > 1:
-                names = {p["name_maps"][did].get(c, c) for c in codes}
-                warn.setdefault(p["dims"].get(did, did), set()).update(names)
+                warn.setdefault(p["dims"].get(did, did), set()).update({p["name_maps"][did].get(c, c) for c in codes})
 
-        # 集計
+        # 集計（指標ごとに振り分け）
         for r in p["records"]:
-            if not _passes(r, filt):
+            if not _passes(r, base):
                 continue
             t = r["time_name"] or ((fy + "年") if fy else "—")
             code = r["time_code"] or ((fy + "000000") if fy else None)
             if code:
                 order[t] = code
-            if not unit and r.get("unit"):
-                unit = r["unit"]
+            if tab:
+                key = rev.get(r.get(tab, {}).get("code"))
+                if key is None:
+                    continue
+            else:
+                key = measures[0][0]
+            if not munit[key] and r.get("unit"):
+                munit[key] = r["unit"]
             if r["pref_id"]:
-                combined_series.setdefault(t, {})[str(r["pref_id"])] = r["value"]
+                mdata[key].setdefault(t, {})[str(r["pref_id"])] = r["value"]
             elif r.get("is_national"):
-                combined_national[t] = r["value"]
+                mnat[key][t] = r["value"]
 
-    years = sorted(combined_series.keys(), key=lambda t: order.get(t, t))
+    present_measures = [k for k, _, _ in measures if mdata[k]]
+    yset = set()
+    for k in present_measures:
+        yset |= set(mdata[k].keys())
+    years = sorted(yset, key=lambda t: order.get(t, t))
+    labels = {k: lab for k, lab, _ in measures}
     dataset = {"key": a.key or a.name, "name": a.name, "suffix": a.suffix,
-               "measures": ["harvest"], "measure_labels": {"harvest": a.measure_label},
-               "units": {"harvest": unit}, "years": years,
-               "data": {"harvest": combined_series}, "national": {"harvest": combined_national},
+               "measures": present_measures or [measures[0][0]],
+               "measure_labels": labels,
+               "units": {k: munit[k] for k, _, _ in measures},
+               "years": years,
+               "data": {k: mdata[k] for k, _, _ in measures},
+               "national": {k: mnat[k] for k, _, _ in measures},
                "note": a.note}
 
     rec_path = a.out.rsplit(".", 1)[0] + ".records.json"
@@ -375,12 +435,18 @@ def main():
         source = "政府統計の総合窓口 e-Stat"
     meta = {"stats_ids": a.stats_id, "filters": used_filters, "tables": tables_meta,
             "source": source, "generated": datetime.date.today().isoformat()}
+    dataset["source"] = source
+    dataset["tables"] = tables_meta
+    dataset["stats_ids"] = a.stats_id
+    dataset["filters"] = used_filters
+    dataset["generated"] = meta["generated"]
     with open(a.out, "w", encoding="utf-8") as f:
-        json.dump({"meta": meta, "series": combined_series}, f, ensure_ascii=False, indent=1)
+        json.dump({"meta": meta, "measures": present_measures, "series": mdata}, f, ensure_ascii=False, indent=1)
 
     print("保存: {}（年次 {} / 明細 {} 行 → {}）".format(a.out, len(years), len(all_records), rec_path))
     if used_filters:
         print("絞り込み:", ", ".join("{}={}".format(k, v) for k, v in used_filters.items()))
+    print("指標:", ", ".join("{}".format(labels[k]) for k in present_measures) or "（取得できた指標なし）")
     if not area_id:
         print("⚠ 都道府県の区分が見つかりません。都道府県別の表を指定してください。")
     for sid, dnames, sample in zero_tables:
@@ -389,14 +455,15 @@ def main():
             print("    地域候補の中身例: " + " | ".join(sample))
     if warn:
         print("⚠ 複数の区分が混在しています。下記を --pick で1つに絞ってください（数値が混ざる原因）:")
-        for name, vals in warn.items():
-            sample = "／".join(list(vals)[:8])
-            print("   - {}: {}".format(name, sample))
+        for nm, vals in warn.items():
+            print("   - {}: {}".format(nm, "／".join(list(vals)[:8])))
     if years:
         print("年次:", years[0], "〜", years[-1], "（{}区分）".format(len(years)))
         latest = years[-1]
-        top = sorted(((p, v) for p, v in combined_series[latest].items() if v is not None), key=lambda x: -x[1])[:5]
-        print("[{}] 上位5:".format(latest), ", ".join("{}={:,.0f}".format(PREF[int(p)], v) for p, v in top))
+        mk = present_measures[0] if present_measures else measures[0][0]
+        cells = mdata[mk].get(latest, {})
+        top = sorted(((pp, v) for pp, v in cells.items() if v is not None), key=lambda x: -x[1])[:5]
+        print("[{} / {}] 上位5:".format(latest, labels[mk]), ", ".join("{}={:,.0f}".format(PREF[int(pp)], v) for pp, v in top))
 
     if a.emit_js:
         datasets = []
