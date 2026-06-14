@@ -2,7 +2,7 @@
 
 温州みかんと柑橘類の統計を、**都道府県別の塗り分け地図**で見られるサイトです。生産・市場・消費・担い手の各指標を、すべて政府統計の総合窓口 **e-Stat の公式データ**（API またはダウンロードした統計表 Excel）からのみ作成しています（Webスクレイピングは行っていません）。
 
-公開ページ（GitHub Pages）: https://mikan2010.github.io/mikan-map/market.html
+公開ページ（GitHub Pages）: [https://mikan2010.github.io/mikan-map.html](https://mikan2010.github.io/mikan-map.html)
 
 ---
 
@@ -133,4 +133,4 @@ HTML 4ページは外部依存を最小化するため、Leaflet と都道府県
 - **ライブラリ等**：[Leaflet](https://leafletjs.com/)、[Google Fonts](https://fonts.google.com/)（Zen Kaku Gothic New / Shippori Mincho B1）。
 - 本リポジトリのコード（スクリプト・HTML）のライセンスは、必要に応じて追記してください（例：MIT）。
 
-※ 数値はいずれも出典の政府統計を加工して作成したものであり、加工の責任は本リポジトリの作成者にあります。正確な値は各出典の原典をご確認ください。
+※ 数値はいずれも出典の政府統計を加工して作成したものであり、正確な値は各出典の原典をご確認ください。
