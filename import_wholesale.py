@@ -41,7 +41,7 @@ def slugify(name):
     return "oroshi_" + re.sub(r"[^0-9A-Za-zぁ-んァ-ヶ一-龠]+", "", name)[:24]
 
 
-def build(app_id, sid, name):
+def build(app_id, sid, name, by="origin"):
     # 対象月=計 のみ取得（cat01=計 を想定。違っても全件取得→後段で計を優先）
     class_obj, values, ti = fetch_raw(app_id, sid, {"cdCat01": "1001"})
     p = parse(class_obj, values)
@@ -84,27 +84,39 @@ def build(app_id, sid, name):
             d["p"] = val
             unit_p = v.get("@unit", unit_p) or unit_p
 
-    # 産地ごとに集計（数量=合計、価格=数量加重平均）
+    # 集計：by="origin"（産地別）／ by="market"（消費市場別）
     agg = {}
     for ac, d in cells.items():
         cname = nm[area_dim].get(ac, "")
-        if SPLIT not in cname:
-            continue  # 「<市場>_産地計」= 市場小計はスキップ
-        origin = cname.split(SPLIT)[-1].strip()
-        pid = match_pref(None, origin)
+        if by == "market":
+            if SPLIT in cname or not cname.endswith("_産地計"):
+                continue                       # 産地内訳行は除外、市場合計行のみ採用
+            key_name = cname[:-len("_産地計")].strip()    # 「東京都_産地計」→「東京都」
+        else:
+            if SPLIT not in cname:
+                continue                       # 「<市場>_産地計」= 市場小計はスキップ
+            key_name = cname.split(SPLIT)[-1].strip()     # 産地
+        pid = match_pref(None, key_name)
         if not pid:
             continue
         q = d.get("q")
         pr = d.get("p")
-        a = agg.setdefault(pid, {"q": 0.0, "wsum": 0.0, "wq": 0.0})
+        a = agg.setdefault(pid, {"q": 0.0, "wsum": 0.0, "wq": 0.0, "praw": None})
         if q is not None:
             a["q"] += q
             if pr is not None:
                 a["wsum"] += pr * q
                 a["wq"] += q
+        elif pr is not None:
+            a["praw"] = pr                      # 数量欠落でも価格があれば保持
 
     qty = {str(pid): round(a["q"], 1) for pid, a in agg.items() if a["q"] > 0}
-    price = {str(pid): round(a["wsum"] / a["wq"], 1) for pid, a in agg.items() if a["wq"] > 0}
+    price = {}
+    for pid, a in agg.items():
+        if a["wq"] > 0:
+            price[str(pid)] = round(a["wsum"] / a["wq"], 1)
+        elif a["praw"] is not None:
+            price[str(pid)] = round(a["praw"], 1)
     tot_q = round(sum(a["q"] for a in agg.values()), 1)
     tot_wsum = sum(a["wsum"] for a in agg.values())
     tot_wq = sum(a["wq"] for a in agg.values())
@@ -114,19 +126,27 @@ def build(app_id, sid, name):
     year = year + "年" if re.fullmatch(r"\d{4}", year or "") else "—"
     ttitle = (_text(ti.get("STATISTICS_NAME")) + " / " + _text(ti.get("TITLE"))).strip(" /")
 
+    if by == "market":
+        mlabels = {"数量": "卸売数量（市場計）", "価格": "卸売価格（市場平均）"}
+        note = "各消費市場（中央卸売市場等）でのみかんの卸売価格・数量＝『各都市でいくらで売られているか』。市場名をその所在都道府県に割り当て。"
+    else:
+        mlabels = {"数量": "卸売数量", "価格": "卸売価格（数量加重平均）"}
+        note = "各産地が主要消費市場へ出した分の合計と加重平均価格＝『どこ産か（産地別）』。卸売価格は数量加重平均（取扱量の多い市場ほど強く反映＝実勢に近い）。産地不明・その他は除外。"
+
     ds = {
         "key": slugify(name), "name": name, "suffix": "",
+        "category": "market",
         "measures": ["数量", "価格"],
-        "measure_labels": {"数量": "卸売数量", "価格": "卸売価格（数量加重平均）"},
+        "measure_labels": mlabels,
         "units": {"数量": unit_q or "t", "価格": unit_p or "円/kg"},
         "years": [year],
         "data": {"数量": {year: qty}, "価格": {year: price}},
         "national": {"数量": {year: tot_q}, "価格": {year: nat_price}},
-        "note": "主要消費市場で取り扱われた分の集計。卸売価格は数量加重平均（取扱量の多い市場ほど強く反映＝実勢に近い）。産地不明・その他は除外。",
+        "note": note,
         "source": SOURCE,
         "tables": [{"id": sid, "title": ttitle, "period": year}],
         "stats_ids": [sid],
-        "filters": {"対象月": "計"},
+        "filters": {"対象月": "計", "集計": ("消費市場別" if by == "market" else "産地別")},
         "generated": datetime.date.today().isoformat(),
     }
     return ds, qty, price
@@ -135,7 +155,9 @@ def build(app_id, sid, name):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stats-id", required=True)
-    ap.add_argument("--name", default="みかん（卸売・産地別）")
+    ap.add_argument("--by", choices=["origin", "market"], default="origin",
+                    help="origin=産地別（どこ産か・既定）, market=消費市場別（各都市でいくら）")
+    ap.add_argument("--name", default=None)
     ap.add_argument("--app-id", default=os.environ.get("ESTAT_APP_ID"))
     ap.add_argument("--emit-js", default=None)
     ap.add_argument("--append", action="store_true")
@@ -144,8 +166,10 @@ def main():
     if not a.app_id:
         sys.exit("アプリIDを ESTAT_APP_ID 環境変数か --app-id で指定してください。")
 
-    ds, qty, price = build(a.app_id, a.stats_id, a.name)
-    print("産地県数: 数量 {} 県 / 価格 {} 県".format(len(qty), len(price)))
+    name = a.name or ("みかん（卸売・消費市場別）" if a.by == "market" else "みかん（卸売・産地別）")
+    ds, qty, price = build(a.app_id, a.stats_id, name, a.by)
+    unit = "市場" if a.by == "market" else "産地県"
+    print("{}数: 数量 {} / 価格 {}".format(unit, len(qty), len(price)))
     top = sorted(price.items(), key=lambda kv: -kv[1])[:5]
     from fetch_estat import PREF
     print("卸売価格 上位5:", "、".join("{}={}".format(PREF[int(k)], v) for k, v in top))
