@@ -70,6 +70,19 @@
   .stleg{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;font-size:12px}
   .stleg i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
   .foot{margin-top:34px;font-size:11.5px;color:var(--muted);border-top:1px solid var(--hair);padding-top:12px}
+  .tblwrap{overflow:auto;max-height:460px;border:1px solid var(--hair);border-radius:10px;margin-top:6px}
+  table.cmp{border-collapse:separate;border-spacing:0;font-size:12.5px;width:100%}
+  table.cmp th,table.cmp td{padding:6px 10px;white-space:nowrap;text-align:right}
+  table.cmp thead th{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--hair);cursor:pointer;color:#5c564c;font-weight:700}
+  table.cmp thead th.on{color:var(--peel)}
+  table.cmp thead th.on.desc::after{content:" ▼";font-size:9px}
+  table.cmp thead th.on.asc::after{content:" ▲";font-size:9px}
+  table.cmp thead th .u{display:block;font-size:10px;color:var(--muted);font-weight:500}
+  table.cmp tbody th{position:sticky;left:0;background:#fff;text-align:left;font-weight:700;color:#3a352e;cursor:pointer;border-right:1px solid var(--hair)}
+  table.cmp tbody tr{cursor:pointer}
+  table.cmp tbody td{font-variant-numeric:tabular-nums;color:#3a352e}
+  table.cmp tbody tr:hover td,table.cmp tbody tr:hover th{background:#FAF6EE}
+  table.cmp tbody tr.sel td,table.cmp tbody tr.sel th{background:#FBE7DC}
   a{color:var(--peel)}
 </style>
 </head>
@@ -100,8 +113,11 @@
     <div class="card" id="varCard"></div>
   </div>
 
-  <h2 class="sech">品種をくらべる<span class="n">横=栽培面積、縦=単収（収穫量÷面積）、円=収穫量</span></h2>
+  <h2 class="sech">品種をくらべる<span class="n">散布図：横=栽培面積、縦=単収（収穫量÷面積）、円=収穫量</span></h2>
   <div class="card" id="cmpCard"></div>
+
+  <h2 class="sech">品種を数値でくらべる<span class="n">並べ替え可能な比較表（単収・加工率など）</span></h2>
+  <div class="card" id="cmpTableCard"></div>
 
   <h2 class="sech">品種全体の分布<span class="n">中晩柑の収穫量シェア（2021）</span></h2>
   <div class="card" id="distCard"></div>
@@ -118,7 +134,7 @@ const ALL = Array.isArray(window.MIKAN_DATA)?window.MIKAN_DATA:[];
 const MLAB = {harvest:"収穫量",area:"栽培面積",ship:"出荷量",proc:"加工向け"};
 const MUNIT = {harvest:"t",area:"ha",ship:"t",proc:"t"};
 const NCOLS = 20;            // マトリクスに出す品種数（収穫量上位）
-const state = {measure:"harvest", pid:"30", vidx:0};
+const state = {measure:"harvest", pid:"30", vidx:0, sortKey:"harvest", sortDir:-1};
 
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt=(n,d=0)=> (n==null||isNaN(n))?"–":Number(n).toLocaleString("ja-JP",{maximumFractionDigits:d});
@@ -271,7 +287,49 @@ function renderDist(){
      <p class="src">出典：${esc(T.source)}〔${esc(T.table)}・${esc(T.period)}〕${unshu?"／温州みかんの参考値は作物統計（mikan_data.js）":""}</p>`;
 }
 
-function renderAll(){ renderMatrix(); renderPref(); renderVar(); }
+/* ---------- 品種を数値でくらべる（並べ替え表） ---------- */
+function vmetrics(){
+  return T.varieties.map((v,i)=>{
+    const ent=Object.keys(v.pref).map(pid=>({pid,h:v.pref[pid].harvest||0})).sort((a,b)=>b.h-a.h);
+    const yld=(v.total.harvest&&v.total.area)?v.total.harvest/v.total.area:null;
+    const pr=(v.total.proc&&v.total.harvest)?100*v.total.proc/v.total.harvest:null;
+    return {i,name:v.name,short:v.short,harvest:v.total.harvest||0,area:v.total.area||0,
+            ship:v.total.ship||0,yield:yld,proc:pr,nPref:Object.keys(v.pref).length,
+            top:ent.length?PREF[+ent[0].pid]:""};
+  });
+}
+const TCOLS=[["short","品種",""],["harvest","収穫量","t"],["area","栽培面積","ha"],["yield","単収","t/ha"],["ship","出荷量","t"],["proc","加工率","%"],["nPref","産地数",""],["top","最大産地",""]];
+function renderTable(){
+  const k=state.sortKey, dir=state.sortDir;
+  const rows=vmetrics().sort((a,b)=>{
+    let x=a[k],y=b[k];
+    if(typeof x==="string"||typeof y==="string") return dir*String(x).localeCompare(String(y),"ja");
+    x=(x==null?-Infinity:x); y=(y==null?-Infinity:y); return dir*(x-y);
+  });
+  let h='<div class="tblwrap"><table class="cmp"><thead><tr>';
+  TCOLS.forEach(c=>{const on=c[0]===k?` class="on ${dir<0?'desc':'asc'}"`:"";h+=`<th data-k="${c[0]}"${on}>${c[1]}${c[2]?`<span class="u">${c[2]}</span>`:""}</th>`;});
+  h+='</tr></thead><tbody>';
+  rows.forEach(r=>{
+    h+=`<tr data-vi="${r.i}"${r.i===state.vidx?' class="sel"':''}>`+
+       `<th title="${esc(r.name)}">${esc(r.short)}</th>`+
+       `<td>${fmt(r.harvest,0)}</td><td>${fmt(r.area,1)}</td><td><b>${r.yield==null?"–":fmt(r.yield,1)}</b></td>`+
+       `<td>${fmt(r.ship,0)}</td><td>${r.proc==null?"–":fmt(r.proc,1)}</td><td>${r.nPref}</td><td>${esc(r.top)}</td></tr>`;
+  });
+  h+='</tbody></table></div>';
+  document.getElementById("cmpTableCard").innerHTML=
+    `<h3>品種を数値でくらべる<span class="sub" style="font-weight:400">　見出しクリックで並べ替え／行クリックで上の地図・カルテに反映</span></h3>
+     <p class="sub">単収（収穫量÷栽培面積）が高い品種、加工向けが多い品種などを直接くらべられます。「単収」を押すと単収順に並びます。産地数が少ない品種は単収が高く出やすい点にご注意ください。</p>${h}
+     <p class="src">出典：${esc(T.source)}〔${esc(T.table)}・${esc(T.period)}〕。単収＝収穫量÷栽培面積、加工率＝加工向け÷収穫量。</p>`;
+  document.querySelectorAll('table.cmp thead th[data-k]').forEach(el=>el.onclick=()=>{
+    const nk=el.dataset.k;
+    if(state.sortKey===nk) state.sortDir*=-1;
+    else { state.sortKey=nk; state.sortDir=(nk==="short"||nk==="top")?1:-1; }
+    renderTable();
+  });
+  document.querySelectorAll('table.cmp tbody tr[data-vi]').forEach(el=>el.onclick=()=>{ state.vidx=+el.dataset.vi; renderAll(); });
+}
+
+function renderAll(){ renderMatrix(); renderPref(); renderVar(); renderTable(); }
 
 function init(){
   const foot=document.getElementById("foot");
