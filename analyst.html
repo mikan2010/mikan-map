@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>産地の構造を読む ｜ 収穫量 × 面積の分析</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FBFAF6;--panel:#FFFFFF;--sea:#F2EFE6;--ink:#2A2722;--muted:#8C8576;--hair:#E7E2D6;
+    --leaf:#3F7A3D;--peel:#C2410C;--scale:#8C5A2B;--low:#B8B0A0;--nodata:#E7E3D9;
+    --shadow:0 1px 2px rgba(60,45,20,.06),0 8px 24px rgba(60,45,20,.06);
+  }
+  *{box-sizing:border-box}html,body{margin:0}
+  body{background:var(--paper);color:var(--ink);font-family:"Zen Kaku Gothic New",system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.5;font-variant-numeric:tabular-nums}
+  .wrap{max-width:1060px;margin:0 auto;padding:26px 20px 56px}
+  .topnav{display:flex;gap:14px;align-items:center;font-size:13px;font-weight:700;margin-bottom:6px}
+  .topnav a{color:var(--muted);text-decoration:none;padding:5px 11px;border:1px solid var(--hair);border-radius:999px}
+  .topnav a.here{color:#fff;background:var(--peel);border-color:var(--peel)}
+  .eyebrow{font-size:12px;letter-spacing:.16em;color:var(--peel);font-weight:700;text-transform:uppercase;margin-top:8px}
+  h1{font-family:"Shippori Mincho B1",serif;font-weight:700;font-size:clamp(26px,5vw,44px);line-height:1.05;margin:.16em 0 .12em}
+  .lede{color:var(--muted);max-width:66ch;font-size:15px;margin:0}
+  .controls{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;margin:22px 0 8px}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:11px;letter-spacing:.04em;color:var(--muted);font-weight:700;text-transform:uppercase}
+  select{font:inherit;font-weight:700;font-size:14px;padding:9px 12px;border:1px solid var(--hair);border-radius:10px;background:#fff;color:var(--ink);min-width:200px}
+  .kpis{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0 6px}
+  .kpi{background:var(--panel);border:1px solid var(--hair);border-radius:14px;box-shadow:var(--shadow);padding:13px 16px;min-width:150px;flex:1}
+  .kpi .k{font-size:11px;letter-spacing:.05em;color:var(--muted);font-weight:700;text-transform:uppercase}
+  .kpi .v{font-family:"Shippori Mincho B1",serif;font-weight:700;font-size:clamp(20px,3vw,28px);color:var(--ink);margin-top:2px}
+  .kpi .v small{font-size:12px;color:var(--muted);font-weight:500;font-family:"Zen Kaku Gothic New";margin-left:3px}
+  .grid{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;margin-top:16px}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--hair);border-radius:18px;box-shadow:var(--shadow);padding:16px 18px}
+  .card h3{margin:0 0 4px;font-size:15px;font-weight:700}
+  .card h3 .n{font-size:11.5px;color:var(--muted);font-weight:500;margin-left:6px}
+  .sub{font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.6}
+  .insights{list-style:none;padding:0;margin:8px 0 0}
+  .insights li{position:relative;padding:9px 0 9px 22px;border-top:1px solid var(--hair);font-size:14px;line-height:1.65}
+  .insights li:first-child{border-top:0}
+  .insights li::before{content:"";position:absolute;left:2px;top:15px;width:8px;height:8px;background:var(--peel);border-radius:0 60% 0 60%;transform:rotate(8deg)}
+  .insights b{color:var(--peel)}
+  .sech{font-family:"Shippori Mincho B1",serif;font-weight:700;font-size:clamp(18px,3vw,24px);margin:30px 0 2px}
+  .sech .n{font-size:12px;color:var(--muted);font-weight:500;font-family:"Zen Kaku Gothic New";margin-left:8px}
+  .src{font-size:11.5px;color:var(--muted);margin:10px 0 0;line-height:1.6;border-top:1px dashed var(--hair);padding-top:8px}
+  svg{display:block;width:100%;height:auto;overflow:visible}
+  .axis{stroke:var(--hair);stroke-width:1}
+  .axisText{fill:var(--muted);font-size:11px;font-family:"Zen Kaku Gothic New"}
+  .qline{stroke:var(--muted);stroke-dasharray:3 4;stroke-width:1;opacity:.7}
+  .qlabel{fill:var(--muted);font-size:10.5px;font-weight:700}
+  .ptlabel{fill:var(--ink);font-size:10.5px;font-weight:700}
+  .bar{rx:4}
+  .barlabel{fill:var(--ink);font-size:12px}
+  .barval{fill:var(--muted);font-size:11px}
+  .legend{display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:10px;font-size:12px;color:var(--muted)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+  details.tbl{margin-top:16px}
+  details.tbl summary{cursor:pointer;font-weight:700;font-size:14px;color:var(--ink)}
+  table{border-collapse:collapse;width:100%;margin-top:10px;font-size:13px}
+  th,td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--hair)}
+  th:first-child,td:first-child{text-align:left}
+  th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  .datatag{font-size:12px;color:var(--muted);line-height:1.7;margin-top:18px}
+  .datatag a{color:var(--peel)}
+  .datatag details{margin-top:4px}
+  footer{margin-top:22px;font-size:12px;color:var(--muted);line-height:1.7;border-top:1px solid var(--hair);padding-top:14px}
+  footer a{color:var(--peel)}
+  .empty{background:var(--panel);border:1px solid var(--hair);border-radius:18px;box-shadow:var(--shadow);padding:30px;text-align:center;color:var(--peel);font-weight:700;margin-top:18px}
+  .empty span{display:block;font-weight:400;color:var(--muted);font-size:13px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="topnav">
+    <a href="index.html">産地マップ</a>
+    <a href="market.html">市場</a>
+    <a href="labor.html">担い手</a>
+    <a href="analyst.html" class="here">分析</a>
+  </nav>
+  <div class="eyebrow">分析 ／ 収穫量 × 栽培面積</div>
+  <h1>産地の構造を読む</h1>
+  <p class="lede">収穫量と栽培面積を組み合わせると、その県の柑橘生産が「広く作る規模型」か「面積あたり多く穫る集約型」かが見えてきます。品目を選ぶと、単収（収穫量÷面積）・全国シェア・産地の集中度を計算し、特徴を要約します。</p>
+
+  <div class="controls">
+    <div class="field"><label>品目</label><select id="dsSel"></select></div>
+    <div class="field" id="yearWrap"><label>年次</label><select id="ySel"></select></div>
+  </div>
+
+  <div id="app"></div>
+
+  <footer id="foot"></footer>
+</div>
+
+<script src="mikan_data.js"></script>
+<script>
+const PREF=["","北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県","茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県","新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県","三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"];
+const ALL = Array.isArray(window.MIKAN_DATA)?window.MIKAN_DATA:[];
+// 収穫量と面積の両方を持つ品目だけ分析対象
+const SETS = ALL.filter(d=>d.measures&&d.measures.indexOf("harvest")>=0&&d.measures.indexOf("area")>=0);
+
+const fmt=(n,d=0)=>n==null?"—":Number(n).toLocaleString("ja-JP",{maximumFractionDigits:d,minimumFractionDigits:d});
+const esc=s=>String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const median=a=>{if(!a.length)return null;const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2;};
+function niceMax(x){if(x<=0)return 1;const e=Math.pow(10,Math.floor(Math.log10(x))),m=x/e,n=m<1.5?1.5:m<2?2:m<3?3:m<5?5:m<7?7:10;return n*e;}
+
+const state={i:0,year:null};
+
+function metrics(ds,year){
+  const H=(ds.data.harvest&&ds.data.harvest[year])||{};
+  const A=(ds.data.area&&ds.data.area[year])||{};
+  const ids=new Set([...Object.keys(H),...Object.keys(A)]);
+  const rows=[]; let sumH=0,sumA=0;
+  ids.forEach(id=>{const h=H[id]==null?null:+H[id],a=A[id]==null?null:+A[id];
+    if(h!=null)sumH+=h; if(a!=null)sumA+=a;
+    rows.push({id:+id,name:PREF[+id]||id,h,a,y:(h!=null&&a!=null&&a>0)?h/a:null});});
+  let natH=ds.national&&ds.national.harvest&&ds.national.harvest[year];
+  let natA=ds.national&&ds.national.area&&ds.national.area[year];
+  if(natH==null)natH=sumH; if(natA==null)natA=sumA;
+  rows.forEach(r=>r.share=(r.h!=null&&natH>0)?r.h/natH*100:null);
+  rows.sort((a,b)=>(b.h||0)-(a.h||0));
+  return {rows,natH,natA,natY:natA>0?natH/natA:null,year};
+}
+
+function quadrant(rows,medA,medY){
+  const cls=r=>{ if(r.a==null||r.y==null)return null;
+    const big=r.a>=medA, eff=r.y>=medY;
+    return big&&eff?"core":big&&!eff?"scale":!big&&eff?"intense":"small"; };
+  rows.forEach(r=>r.q=cls(r));
+  return rows;
+}
+const QCOLOR={core:"var(--peel)",scale:"var(--scale)",intense:"var(--leaf)",small:"var(--low)"};
+const QNAME={core:"主産地（大規模・高効率）",scale:"規模型（広いが単収は控えめ）",intense:"集約型（小さいが多収）",small:"小規模"};
+
+function insights(ds,m){
+  const R=m.rows.filter(r=>r.h!=null);
+  const out=[];
+  out.push(`全国の収穫量は <b>${fmt(m.natH)} t</b>、栽培面積は <b>${fmt(m.natA)} ha</b>。面積あたりの平均単収は <b>${fmt(m.natY,1)} t/ha</b> です。`);
+  const top=R.slice(0,3);
+  if(top.length){
+    const sh=top.reduce((a,r)=>a+(r.share||0),0);
+    const lv=sh>=60?"特定の産地に強く集中":sh>=40?"上位県にやや集中":"比較的分散";
+    out.push(`上位3県（${top.map(r=>r.name).join("・")}）で全国の <b>${fmt(sh,0)}%</b>。産地は${lv}しています。`);
+  }
+  const withY=R.filter(r=>r.y!=null&&r.a!=null);
+  if(withY.length&&m.natY){
+    const by=[...withY].sort((a,b)=>b.y-a.y);
+    const hi=by[0];
+    out.push(`単収（面積あたりの収穫量）が最も高いのは <b>${hi.name}</b>（${fmt(hi.y,1)} t/ha、全国平均の${fmt(hi.y/m.natY,1)}倍）。同じ面積でも多く穫れる産地です。`);
+    const medA=median(withY.map(r=>r.a)),medY=median(withY.map(r=>r.y));
+    quadrant(m.rows,medA,medY);
+    const pick=q=>withY.filter(r=>r.q===q).sort((a,b)=>(b.h||0)-(a.h||0)).slice(0,3).map(r=>r.name);
+    const scale=pick("scale"),intense=pick("intense");
+    if(scale.length)out.push(`面積は大きいが単収は平均以下の<b>規模型</b>: ${scale.join("・")}。作付けは広く、単収を上げる余地があるタイプです。`);
+    if(intense.length)out.push(`面積は小さいが単収が高い<b>集約型</b>: ${intense.join("・")}。限られた面積で効率よく生産しています。`);
+  }
+  // 集中度(HHI)
+  const hhi=R.reduce((a,r)=>a+Math.pow(r.share||0,2),0);
+  const lv=hhi>=2500?"高い":hhi>=1500?"中程度":"低い";
+  out.push(`産地集中度（HHI）は <b>${fmt(hhi,0)}</b>（集中度は${lv}）。数値が大きいほど少数の県に偏っていることを示します。`);
+  return out;
+}
+
+// ---- SVG: 規模×効率 散布図 ----
+function scatter(m){
+  const W=720,H=440,L=58,Rm=18,T=18,B=46;
+  const pts=m.rows.filter(r=>r.a!=null&&r.y!=null&&r.a>0);
+  if(pts.length<3)return `<div class="sub">面積・単収の両方がそろう県が少なく、散布図を描けません。</div>`;
+  const maxA=niceMax(Math.max(...pts.map(p=>p.a)));
+  const maxY=niceMax(Math.max(...pts.map(p=>p.y)));
+  const maxH=Math.max(...pts.map(p=>p.h||0))||1;
+  const medA=median(pts.map(p=>p.a)),medY=median(pts.map(p=>p.y));
+  quadrant(m.rows,medA,medY);
+  const px=a=>L+(W-L-Rm)*(a/maxA), py=y=>T+(H-T-B)*(1-y/maxY);
+  const rr=h=>4+10*Math.sqrt((h||0)/maxH);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="規模と効率の散布図">`;
+  // grid/axes
+  s+=`<line class="axis" x1="${L}" y1="${H-B}" x2="${W-Rm}" y2="${H-B}"/><line class="axis" x1="${L}" y1="${T}" x2="${L}" y2="${H-B}"/>`;
+  for(let i=0;i<=4;i++){const gx=L+(W-L-Rm)*i/4, gy=T+(H-T-B)*i/4;
+    s+=`<text class="axisText" x="${gx}" y="${H-B+16}" text-anchor="middle">${fmt(maxA*i/4)}</text>`;
+    s+=`<text class="axisText" x="${L-8}" y="${py(maxY*i/4)+3}" text-anchor="end">${fmt(maxY*i/4,1)}</text>`;}
+  // median quadrant lines
+  s+=`<line class="qline" x1="${px(medA)}" y1="${T}" x2="${px(medA)}" y2="${H-B}"/>`;
+  s+=`<line class="qline" x1="${L}" y1="${py(medY)}" x2="${W-Rm}" y2="${py(medY)}"/>`;
+  s+=`<text class="qlabel" x="${W-Rm}" y="${T+12}" text-anchor="end">右上＝大規模・高効率</text>`;
+  s+=`<text class="qlabel" x="${L+4}" y="${H-B-6}">左下＝小規模・低単収</text>`;
+  // points
+  const labeled=[...pts].sort((a,b)=>(b.h||0)-(a.h||0)).slice(0,8).map(p=>p.id);
+  pts.forEach(p=>{const c=QCOLOR[p.q]||"var(--low)";
+    s+=`<circle cx="${px(p.a).toFixed(1)}" cy="${py(p.y).toFixed(1)}" r="${rr(p.h).toFixed(1)}" fill="${c}" fill-opacity="0.72" stroke="#fff" stroke-width="1"><title>${esc(p.name)}：単収 ${fmt(p.y,1)} t/ha・面積 ${fmt(p.a)} ha・収穫量 ${fmt(p.h)} t</title></circle>`;
+    if(labeled.includes(p.id))s+=`<text class="ptlabel" x="${px(p.a).toFixed(1)}" y="${(py(p.y)-rr(p.h)-3).toFixed(1)}" text-anchor="middle">${esc(p.name.replace(/[都道府県]$/,""))}</text>`;});
+  s+=`<text class="axisText" x="${(L+W-Rm)/2}" y="${H-6}" text-anchor="middle">栽培面積（ha）→ 規模</text>`;
+  s+=`<text class="axisText" transform="translate(14 ${(T+H-B)/2}) rotate(-90)" text-anchor="middle">単収（t/ha）→ 効率</text>`;
+  s+=`</svg>`;
+  s+=`<div class="legend">`+Object.keys(QNAME).map(q=>`<span><i style="background:${QCOLOR[q]}"></i>${QNAME[q]}</span>`).join("")+`<span>※円の大きさ＝収穫量</span></div>`;
+  return s;
+}
+
+// ---- SVG: 横棒ランキング ----
+function bars(items,unit,decimals,color){
+  if(!items.length)return `<div class="sub">データがありません。</div>`;
+  const W=360,rowH=24,top=6,L=84,Rm=44,H=top*2+rowH*items.length;
+  const max=Math.max(...items.map(d=>d.v))||1;
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img">`;
+  items.forEach((d,i)=>{const y=top+i*rowH, w=(W-L-Rm)*(d.v/max);
+    s+=`<text class="barlabel" x="${L-8}" y="${y+rowH/2+4}" text-anchor="end">${esc(d.name.replace(/[都道府県]$/,""))}</text>`;
+    s+=`<rect class="bar" x="${L}" y="${y+3}" width="${Math.max(2,w).toFixed(1)}" height="${rowH-9}" rx="4" fill="${color}" fill-opacity="0.85"/>`;
+    s+=`<text class="barval" x="${L+Math.max(2,w)+5}" y="${y+rowH/2+4}">${fmt(d.v,decimals)}${unit}</text>`;});
+  s+=`</svg>`; return s;
+}
+
+function laborData(){
+  const out={};
+  const pds=ALL.find(d=>(d.measures||[]).indexOf("people")>=0);
+  const ads=ALL.find(d=>(d.measures||[]).indexOf("age")>=0);
+  if(pds){ const y=pds.years[pds.years.length-1];
+    out.peopleDs=pds; out.peopleYear=y; out.people=(pds.data.people&&pds.data.people[y])||{};
+    out.peopleUnit=(pds.units&&pds.units.people)||""; }
+  if(ads){ const y=ads.years[ads.years.length-1];
+    out.ageDs=ads; out.ageYear=y; out.age=(ads.data.age&&ads.data.age[y])||{}; }
+  return out;
+}
+
+function scatterXY(pts,xlab,ylab,color){
+  const W=720,H=400,Lm=58,Rm=18,T=16,B=46;
+  if(pts.length<3) return `<div class="sub">対応する都道府県が少なく、図を描けません。</div>`;
+  const maxX=niceMax(Math.max(...pts.map(p=>p.x)));
+  const minX=Math.max(0,Math.floor(Math.min(...pts.map(p=>p.x))*0.9));
+  const maxY=niceMax(Math.max(...pts.map(p=>p.y)));
+  const sx=x=>Lm+(W-Lm-Rm)*((x-minX)/((maxX-minX)||1));
+  const sy=y=>T+(H-T-B)*(1-y/maxY);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img">`;
+  s+=`<line class="axis" x1="${Lm}" y1="${H-B}" x2="${W-Rm}" y2="${H-B}"/><line class="axis" x1="${Lm}" y1="${T}" x2="${Lm}" y2="${H-B}"/>`;
+  for(let i=0;i<=4;i++){const gx=minX+(maxX-minX)*i/4, gy=maxY*i/4;
+    s+=`<text class="axisText" x="${sx(gx)}" y="${H-B+16}" text-anchor="middle">${fmt(gx,1)}</text>`;
+    s+=`<text class="axisText" x="${Lm-8}" y="${sy(gy)+3}" text-anchor="end">${fmt(gy,1)}</text>`;}
+  const mx=median(pts.map(p=>p.x)), my=median(pts.map(p=>p.y));
+  s+=`<line class="qline" x1="${sx(mx).toFixed(1)}" y1="${T}" x2="${sx(mx).toFixed(1)}" y2="${H-B}"/>`;
+  s+=`<line class="qline" x1="${Lm}" y1="${sy(my).toFixed(1)}" x2="${W-Rm}" y2="${sy(my).toFixed(1)}"/>`;
+  const lab=[...pts].sort((a,b)=>b.y-a.y).slice(0,8).map(p=>p.name);
+  pts.forEach(p=>{ s+=`<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="5" fill="${color}" fill-opacity="0.72" stroke="#fff" stroke-width="1"><title>${esc(p.name)}：${esc(xlab)} ${fmt(p.x,1)} ／ ${esc(ylab)} ${fmt(p.y,1)}</title></circle>`;
+    if(lab.includes(p.name)) s+=`<text class="ptlabel" x="${sx(p.x).toFixed(1)}" y="${(sy(p.y)-8).toFixed(1)}" text-anchor="middle">${esc(p.name.replace(/[都道府県]$/,""))}</text>`;});
+  s+=`<text class="axisText" x="${(Lm+W-Rm)/2}" y="${H-6}" text-anchor="middle">${esc(xlab)}</text>`;
+  s+=`<text class="axisText" transform="translate(14 ${(T+H-B)/2}) rotate(-90)" text-anchor="middle">${esc(ylab)}</text>`;
+  return s+`</svg>`;
+}
+
+function laborSection(m){
+  const L=laborData();
+  if(!L.peopleDs && !L.ageDs) return "";
+  const prod=SETS[state.i], prodSrc=prod.source||"", prodYear=m.year, prodName=prod.name;
+  let blocks="";
+  if(L.peopleDs){
+    const mult=/千/.test(L.peopleUnit||"")?1000:1;
+    const rows=m.rows.filter(r=>r.h!=null && L.people[r.id]!=null && L.people[r.id]>0)
+      .map(r=>({name:r.name, v:r.h/(L.people[r.id]*mult)})).sort((a,b)=>b.v-a.v).slice(0,12);
+    if(rows.length){
+      blocks+=`<div class="card">
+        <h3>1人あたり生産量<span class="n">収穫量 ÷ 基幹的農業従事者数（t/人）</span></h3>
+        <p class="sub">${esc(prodName)}の収穫量（${esc(prodYear)}）を、その県の<strong>農業全体</strong>の基幹的農業従事者数（${esc(L.peopleYear)}）で割った目安です。従事者数はみかん専従ではないため参考値で、産地ほど高くなる傾向を見るものです。</p>
+        ${bars(rows,"","2","var(--leaf)")}
+        <p class="src">出典：${esc(prodSrc)}〔${esc(prodName)}・${esc(prodYear)}〕 ＋ ${esc(L.peopleDs.source||"")}〔${esc(L.peopleDs.name)}・${esc(L.peopleYear)}〕。両者を都道府県で突き合わせて算出。</p>
+      </div>`;
+    }
+  }
+  if(L.ageDs){
+    const pts=m.rows.filter(r=>r.y!=null && L.age[r.id]!=null).map(r=>({name:r.name,x:L.age[r.id],y:r.y}));
+    if(pts.length>=3){
+      blocks+=`<div class="card">
+        <h3>平均年齢 × 単収<span class="n">横=平均年齢、縦=単収。点線は中央値</span></h3>
+        <p class="sub">担い手の高齢化（横）と、面積あたり収量（縦）の関係を見ます。平均年齢は農業全体の値です。</p>
+        ${scatterXY(pts,"農業従事者の平均年齢（歳）","単収（t/ha）","var(--peel)")}
+        <p class="src">出典：${esc(prodSrc)}〔${esc(prodName)}・${esc(prodYear)}〕 ＋ ${esc(L.ageDs.source||"")}〔${esc(L.ageDs.name)}・${esc(L.ageYear)}〕。両者を都道府県で突き合わせて作図。</p>
+      </div>`;
+    }
+  }
+  if(!blocks) return "";
+  return `<h2 class="sech">担い手とのかけ合わせ<span class="n">参考：従事者数・平均年齢は農業全体の値（みかん専従ではない）</span></h2>
+    <div class="grid">${blocks}</div>`;
+}
+
+function consumeData(){
+  const cds=ALL.find(d=>(d.measures||[]).indexOf("buy_qty")>=0);
+  if(!cds) return null;
+  const y=cds.years[cds.years.length-1];
+  return {ds:cds, year:y, qty:(cds.data.buy_qty&&cds.data.buy_qty[y])||{}, unit:(cds.units&&cds.units.buy_qty)||"g"};
+}
+
+function prodConsumeSection(m){
+  const C=consumeData(); if(!C) return "";
+  const prod=SETS[state.i];
+  const pts=m.rows.filter(r=>r.share!=null && C.qty[r.id]!=null).map(r=>({name:r.name,x:r.share,y:C.qty[r.id]}));
+  if(pts.length<3) return "";
+  const medX=median(pts.map(p=>p.x)), medY=median(pts.map(p=>p.y));
+  const both=pts.filter(p=>p.x>=medX&&p.y>=medY).sort((a,b)=>b.x-a.x).slice(0,4).map(p=>p.name);
+  const eatOnly=pts.filter(p=>p.x<medX&&p.y>=medY).sort((a,b)=>b.y-a.y).slice(0,3).map(p=>p.name);
+  let note=`<b>${esc(both.join("・"))}</b> は作る量も家庭での購入量も多く、地産地消の傾向。`;
+  if(eatOnly.length) note+=` 一方 <b>${esc(eatOnly.join("・"))}</b> は主産地ではないが購入量が多い消費地です。`;
+  return `<h2 class="sech">生産 × 消費<span class="n">作る量（横）と、家庭で買う量（縦）の対比</span></h2>
+    <div class="grid"><div class="card">
+      <h3>収穫量シェア × 家計購入量<span class="n">横=全国シェア(%)、縦=1世帯あたり購入量(g/年)</span></h3>
+      <p class="sub">右へ行くほど多く作る県、上へ行くほど家庭でよく買う県。右上は「作って・よく食べる」産地、左上は「作らないがよく買う」消費地です。${note}</p>
+      ${scatterXY(pts,"収穫量シェア（%）","家計購入量（g/世帯・年）","var(--peel)")}
+      <p class="src">出典：${esc(prod.source||"")}〔${esc(prod.name)}・${esc(m.year)}〕 ＋ ${esc(C.ds.source||"")}〔${esc(C.ds.name)}・${esc(C.year)}〕。収穫量シェアと家計の購入量（都道府県庁所在市）を都道府県で突き合わせて作図。</p>
+    </div></div>`;
+}
+
+function render(){
+  const ds=SETS[state.i]; const m=metrics(ds,state.year);
+  const app=document.getElementById("app");
+  const ins=insights(ds,m);
+  const withY=m.rows.filter(r=>r.y!=null);
+  const topY=[...withY].sort((a,b)=>b.y-a.y).slice(0,12).map(r=>({name:r.name,v:r.y}));
+  const topShare=m.rows.filter(r=>r.share!=null).slice(0,12).map(r=>({name:r.name,v:r.share}));
+  app.innerHTML=`
+    <div class="kpis">
+      <div class="kpi"><div class="k">全国収穫量</div><div class="v">${fmt(m.natH)}<small>t</small></div></div>
+      <div class="kpi"><div class="k">全国栽培面積</div><div class="v">${fmt(m.natA)}<small>ha</small></div></div>
+      <div class="kpi"><div class="k">平均単収</div><div class="v">${fmt(m.natY,1)}<small>t/ha</small></div></div>
+      <div class="kpi"><div class="k">産地数</div><div class="v">${m.rows.filter(r=>r.h!=null).length}<small>都道府県</small></div></div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <h3>規模 × 効率 のマップ<span class="n">横=面積、縦=単収。点線は中央値</span></h3>
+        <p class="sub">右上ほど「広く作り、面積あたりも多く穫る」主産地。左上は小さくても多収の集約型、右下は広いが単収は控えめな規模型です。</p>
+        ${scatter(m)}
+      </div>
+      <div class="card">
+        <h3>読み取れること<span class="n">数値から自動要約</span></h3>
+        <ul class="insights">${ins.map(t=>`<li>${t}</li>`).join("")}</ul>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <h3>単収ランキング<span class="n">面積あたりの収穫量（t/ha）</span></h3>
+        ${bars(topY,"","1","var(--leaf)")}
+      </div>
+      <div class="card">
+        <h3>収穫量シェア<span class="n">全国に占める割合（%）</span></h3>
+        ${bars(topShare,"%","1","var(--peel)")}
+      </div>
+    </div>
+    ${laborSection(m)}
+    ${prodConsumeSection(m)}
+    <details class="tbl">
+      <summary>都道府県別の明細（収穫量・面積・単収・シェア）</summary>
+      <table><thead><tr><th>都道府県</th><th>収穫量(t)</th><th>栽培面積(ha)</th><th>単収(t/ha)</th><th>シェア(%)</th></tr></thead>
+      <tbody>${m.rows.filter(r=>r.h!=null||r.a!=null).map(r=>`<tr><td>${esc(r.name)}</td><td>${fmt(r.h)}</td><td>${fmt(r.a)}</td><td>${fmt(r.y,1)}</td><td>${fmt(r.share,1)}</td></tr>`).join("")}</tbody></table>
+    </details>
+    <div class="datatag" id="dataTag"></div>`;
+  buildDataTag(ds,m);
+}
+
+function buildDataTag(ds,m){
+  const el=document.getElementById("dataTag"); if(!el)return;
+  const meta=window.MIKAN_META||{};
+  const src=ds.source||meta.source||"政府統計の総合窓口 e-Stat";
+  const tabs=Array.isArray(ds.tables)?ds.tables:(Array.isArray(meta.tables)?meta.tables:[]);
+  let h=`<b>出典・データについて</b> 統計データ: ${esc(src)}。 対象: ${esc(ds.name)}（${esc(m.year)}）。単収・シェア・集中度はこのページが計算した加工値です。`;
+  if(tabs.length){
+    const li=tabs.map(t=>{const id=String(t.id||""),isId=/^[0-9]{8,}$/.test(id);
+      const head=isId?`<a href="https://www.e-stat.go.jp/dbview?sid=${encodeURIComponent(id)}" target="_blank" rel="noopener">${esc(t.title||id)}</a>`:esc(t.title||id);
+      return `<li>${head}（${isId?"統計表ID "+esc(id):"ファイル "+esc(id)}${t.period?"／"+esc(t.period):""}）</li>`;}).join("");
+    h+=`<details><summary style="cursor:pointer">使用した統計表・ファイル（${tabs.length}件）</summary><ul style="margin:6px 0 0;padding-left:18px;line-height:1.6">${li}</ul></details>`;
+  }
+  el.innerHTML=h;
+}
+
+function buildYear(){
+  const ds=SETS[state.i], ySel=document.getElementById("ySel"), wrap=document.getElementById("yearWrap");
+  ySel.innerHTML=ds.years.map(y=>`<option value="${y}">${y}</option>`).join("");
+  state.year=ds.years[ds.years.length-1]; ySel.value=state.year;
+  wrap.style.display=ds.years.length>1?"":"none";
+}
+
+function init(){
+  const foot=document.getElementById("foot");
+  foot.innerHTML=`出典：各品目の調査（農林水産省／政府統計の総合窓口 e-Stat）のデータを加工して作成。詳細は各品目の「出典・データについて」に記載。<br>地図境界：<a href="https://github.com/dataofjapan/land" target="_blank" rel="noopener">dataofjapan/land</a>（地球地図日本／国土地理院）。`;
+  if(!SETS.length){
+    document.querySelector(".controls").style.display="none";
+    document.getElementById("app").innerHTML=`<div class="empty">面積データを含む品目がありません<span>fetch_estat.py を <b>--all-measures</b> で取得し直すか、特産果樹の柑橘品種を追加すると、収穫量と面積から分析できます。</span></div>`;
+    return;
+  }
+  const dsSel=document.getElementById("dsSel");
+  dsSel.innerHTML=SETS.map((d,i)=>`<option value="${i}">${esc(d.name)}</option>`).join("");
+  dsSel.addEventListener("change",()=>{state.i=+dsSel.value;buildYear();render();});
+  document.getElementById("ySel").addEventListener("change",e=>{state.year=e.target.value;render();});
+  buildYear(); render();
+}
+init();
+</script>
+</body>
+</html>

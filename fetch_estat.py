@@ -35,6 +35,7 @@ except ImportError:
 BASE = "https://api.e-stat.go.jp/rest/3.0/app/json"
 API_DATA = BASE + "/getStatsData"
 API_LIST = BASE + "/getStatsList"
+API_META = BASE + "/getMetaInfo"
 CROP_STATS_CODE = "00500215"
 
 # 指標(measures)プリセット: (キー, 表示名, 照合語)。--all-measures で一括取得
@@ -74,22 +75,62 @@ def _strip_national_prefix(nm):
     return re.sub(r"^全国[ _\u3000・\-]*", "", nm)
 
 
+CITY2PREF = {
+    "札幌":1,"青森":2,"盛岡":3,"仙台":4,"秋田":5,"山形":6,"福島":7,"水戸":8,"宇都宮":9,"前橋":10,
+    "さいたま":11,"千葉":12,"東京都区部":13,"区部":13,"横浜":14,"新潟":15,"富山":16,"金沢":17,"福井":18,
+    "甲府":19,"長野":20,"岐阜":21,"静岡":22,"名古屋":23,"津":24,"大津":25,"京都":26,"大阪":27,"神戸":28,
+    "奈良":29,"和歌山":30,"鳥取":31,"松江":32,"岡山":33,"広島":34,"山口":35,"徳島":36,"高松":37,"松山":38,
+    "高知":39,"福岡":40,"佐賀":41,"長崎":42,"熊本":43,"大分":44,"宮崎":45,"鹿児島":46,"那覇":47,
+}
+
+
+def city_to_pref(name):
+    nm = _norm(name)
+    if not nm:
+        return None
+    nm = re.sub(r"^[0-9０-９]+[ _\u3000]*", "", nm)        # 「01100 札幌市」等の先頭コード除去
+    nm = re.sub(r"^[（(][^）)]*[）)][ _\u3000・\-]*", "", nm)  # 先頭の括弧書き除去
+    if nm in CITY2PREF:
+        return CITY2PREF[nm]
+    m = re.sub(r"市$", "", nm)            # 「和歌山市」→「和歌山」
+    if m in CITY2PREF:
+        return CITY2PREF[m]
+    for city, pid in CITY2PREF.items():   # 「○○市…」等の前方一致
+        if nm.startswith(city):
+            return pid
+    return None
+
+
+def _pref_candidates(nm):
+    """都道府県名の候補列。接頭辞・括弧書き・区切りを順に剥がして照合用候補を作る。"""
+    outs = []
+    x = _strip_national_prefix(nm)
+    outs.append(x)
+    y = re.sub(r"^[（(][^）)]*[）)][ _\u3000・\-]*", "", x)   # 「（都道府県）_和歌山」→「和歌山」
+    if y != x:
+        outs.append(y)
+    for sep in ("_", "・", " ", "\u3000"):                  # 「東北_青森県」→「青森県」
+        if sep in y:
+            outs.append(y.split(sep)[-1])
+    return outs
+
+
 def match_pref(code, name):
-    """コード(PP000) か 都道府県名（短縮形/装飾/「全国_」接頭辞可）から JIS番号を返す。全国/不一致は None。"""
+    """コード(PP000) か 都道府県名（短縮形/装飾/接頭辞付き可）から JIS番号を返す。全国/不一致は None。"""
     if code and _is_pref_code(code):
         return int(code[:2])
     nm = _norm(name)
     if not nm or nm == "全国":
         return None
-    cand = _strip_national_prefix(nm)
-    if not cand or cand == "全国":
-        return None
-    if cand in PREF_STEMS:                 # 「千葉」「全国_千葉」「和歌山県」等
-        return PREF_STEMS[cand]
-    for _i, _pn in enumerate(PREF):
-        if _pn and _pn in cand:            # 「30和歌山県」等の装飾付きフル名
-            return _i
-    return None
+    for cand in _pref_candidates(nm):
+        if not cand or cand == "全国":
+            continue
+        if cand in PREF_STEMS:             # 「千葉」「和歌山」「和歌山県」等
+            return PREF_STEMS[cand]
+        for _i, _pn in enumerate(PREF):
+            if _pn and _pn in cand:        # 「30和歌山県」等の装飾付きフル名
+                return _i
+    return city_to_pref(name)              # 都道府県庁所在市（家計・小売物価）→都道府県
 
 
 def is_national_area(code, name):
@@ -174,6 +215,21 @@ def fetch_raw(app_id, stats_id, extra=None, limit=100000):
     return class_obj, values, table_inf
 
 
+def fetch_meta(app_id, stats_id):
+    """メタ情報のみ取得（データ本体を落とさないので巨大表でも一瞬）。"""
+    params = {"appId": app_id, "statsDataId": stats_id, "lang": "J"}
+    r = requests.get(API_META, params=params, timeout=60)
+    r.raise_for_status()
+    root = r.json().get("GET_META_INFO", {})
+    res = root.get("RESULT", {})
+    if res.get("STATUS") != 0:
+        raise RuntimeError("e-Stat error {}: {}".format(res.get("STATUS"), res.get("ERROR_MSG")))
+    md = root.get("METADATA_INF", {})
+    class_obj = _as_list(md.get("CLASS_INF", {}).get("CLASS_OBJ"))
+    table_inf = md.get("TABLE_INF") or {}
+    return class_obj, table_inf
+
+
 def survey_year(table_inf):
     """統計表メタ(SURVEY_DATE/タイトル)から西暦年(文字列)を推定。年次次元が無い表の補完用。"""
     if not table_inf:
@@ -191,7 +247,7 @@ def survey_year(table_inf):
     return None
 
 
-def parse(class_obj, values):
+def parse(class_obj, values, force_area=None):
     name_maps = {o["@id"]: {c["@code"]: c["@name"] for c in _as_list(o.get("CLASS"))}
                  for o in class_obj}
     dim_names = {o["@id"]: o.get("@name", o["@id"]) for o in class_obj}
@@ -207,14 +263,18 @@ def parse(class_obj, values):
             if match_pref(c.get("@code", ""), c.get("@name", "")) is not None:
                 sc += 1
         return sc
-    area_id, best = None, 0
-    for o in class_obj:
-        sc = pref_score(o)
-        if sc > best:
-            best, area_id = sc, o["@id"]
-    if best < 5:  # 中身で見つからなければ id / 名称で
-        area_id = find(lambda o: o["@id"] == "area") or \
-            find(lambda o: any(k in (o.get("@name") or "") for k in ("都道府県", "都府県", "地域")))
+    area_id = None
+    if force_area:
+        area_id = find(lambda o: force_area in (o.get("@name") or "") or force_area == o["@id"])
+    if not area_id:
+        best = 0
+        for o in class_obj:
+            sc = pref_score(o)
+            if sc > best:
+                best, area_id = sc, o["@id"]
+        if best < 5:  # 中身で見つからなければ id / 名称で
+            area_id = find(lambda o: o["@id"] == "area") or \
+                find(lambda o: any(k in (o.get("@name") or "") for k in ("都道府県", "都府県", "地域")))
     time_id = find(lambda o: o["@id"] == "time") or \
         find(lambda o: any(k in (o.get("@name") or "") for k in ("年", "時間")))
 
@@ -268,6 +328,9 @@ def main():
     ap.add_argument("--stats-code", default=CROP_STATS_CODE,
                     help="検索対象の政府統計コード。作物統計=00500215(既定)／特産果樹生産動態等調査=00500503／all で全統計横断")
     ap.add_argument("--stats-id", action="append")
+    ap.add_argument("--area-dim", default=None, help="地域（都道府県）軸を次元名の一部で強制指定（例: 産地）")
+    ap.add_argument("--inspect", default=None, help="指定statsDataIdの全次元と値の例を表示して終了")
+    ap.add_argument("--grep", default=None, help="--inspect時、各次元の値名をこの語で絞り込み表示")
     ap.add_argument("--app-id", default=os.environ.get("ESTAT_APP_ID"))
     ap.add_argument("--cd-cat01"); ap.add_argument("--cd-cat02")
     ap.add_argument("--cd-area"); ap.add_argument("--cd-time")
@@ -294,14 +357,32 @@ def main():
             sys.exit("全件一覧には --stats-code（例 00500503）を指定してください。")
         print_search(search_tables(a.app_id, word, sc))
         return
-    if not a.stats_id:
-        sys.exit("--stats-id を1つ以上指定してください（--search で探せます）。")
 
     extra = {}
     for attr, pname in [("cd_cat01", "cdCat01"), ("cd_cat02", "cdCat02"),
                         ("cd_area", "cdArea"), ("cd_time", "cdTime")]:
         if getattr(a, attr):
             extra[pname] = getattr(a, attr)
+
+    if a.inspect:
+        class_obj, ti = fetch_meta(a.app_id, a.inspect)
+        p = parse(class_obj, [], force_area=a.area_dim)
+        print("表:", (_text(ti.get("STATISTICS_NAME")) + " / " + _text(ti.get("TITLE"))).strip(" /"))
+        print("自動判定 → 地域軸:", p["area_id"], "／ 時間軸:", p["time_id"])
+        for did, codes in p["name_maps"].items():
+            mark = "  ←地域" if did == p["area_id"] else ("  ←時間" if did == p["time_id"] else "")
+            items = list(codes.items())
+            if a.grep:
+                hits = [(c, n) for c, n in items if a.grep in str(n)]
+                sample = "、".join("{}={}".format(c, n) for c, n in hits[:25])
+                print("[{}] {}{}（全{}件中 {}件一致）: {}".format(
+                    did, p["dims"].get(did, did), mark, len(items), len(hits), sample))
+            else:
+                sample = "、".join("{}={}".format(c, n) for c, n in items[:8])
+                print("[{}] {}{}（{}件）: {}".format(did, p["dims"].get(did, did), mark, len(items), sample))
+        return
+    if not a.stats_id:
+        sys.exit("--stats-id を1つ以上指定してください（--search で探せます）。")
 
     explicit = {}
     for item in a.filter:
@@ -343,7 +424,7 @@ def main():
 
     for sid in a.stats_id:
         class_obj, values, table_inf = fetch_raw(a.app_id, sid, extra)
-        p = parse(class_obj, values)
+        p = parse(class_obj, values, force_area=a.area_dim)
         fy = survey_year(table_inf)
         ti = table_inf or {}
         ttl = (_text(ti.get("STATISTICS_NAME")) + " / " + _text(ti.get("TITLE"))).strip(" /")

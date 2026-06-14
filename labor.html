@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>みかんと柑橘の産地 ｜ 都道府県マップ</title>
+<title>農業の担い手（参考） ｜ 都道府県マップ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
@@ -671,6 +671,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
 		}
 	}
 
+  /* 担い手ページ：アクセントを緑系に */
+  .topnav a.here{background:var(--leaf);border-color:var(--leaf)}
+  .eyebrow{color:var(--leaf)}
 </style>
 <style>
   :root{
@@ -754,14 +757,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
 <div class="wrap">
   <header>
     <nav class="topnav">
-      <a href="index.html" class="here">産地マップ</a>
+      <a href="index.html">産地マップ</a>
       <a href="market.html">市場</a>
-      <a href="labor.html">担い手</a>
+      <a href="labor.html" class="here">担い手</a>
       <a href="analyst.html">分析</a>
     </nav>
-    <div class="eyebrow">e-Stat ／ 農林水産省 作物統計調査（果樹）</div>
-    <h1>みかん<span class="dot"></span>と柑橘の産地</h1>
-    <p class="lede">都道府県別の産地を色分けした地図です。上の選択で品目・指標を切り替え、年次スライダーを左へ動かすと、産地の移り変わりを過去までたどれます。色が濃い地域ほど多い産地で、地域をクリックすると数値や順位を確認できます。数値は政府統計（e-Stat／農林水産省「作物統計調査」）に基づきます。</p>
+    <div class="eyebrow">参考 ／ e-Stat ・ 農林水産省 農業構造動態調査</div>
+    <h1>農業の担い手 <small style="font-size:.5em;color:var(--muted);font-weight:500">（参考）</small></h1>
+    <p class="lede"><strong>参考データです。</strong>ここで扱う基幹的農業従事者数・平均年齢は<strong>農業全体</strong>の数字で、みかん・柑橘に限ったものではありません。産地の担い手の厚みや高齢化の地域差を背景情報として把握するためのページです（みかんの生産・市場とは色味を変えています）。出典は各指標の「データについて」に明記。</p>
   </header>
 
   <div class="controls">
@@ -773,7 +776,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <label>指標</label>
       <div class="seg" id="measSeg" role="group"></div>
     </div>
-    <div class="field">
+    <div class="field" style="display:none">
       <label>ブランド産地</label>
       <label class="toggle"><input type="checkbox" id="brandTog"> 三ヶ日・有田など</label>
     </div>
@@ -805,7 +808,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   </div>
 
   <footer>
-    出典：農林水産省「作物統計調査 作況調査（果樹）」（政府統計の総合窓口 e-Stat）のデータを加工して作成。使用した統計表の正式名称・ID・期間は、上部「出典・データについて」に全件記載。<br>
+    出典：農林水産省「農業構造動態調査」「農林業センサス」（政府統計の総合窓口 e-Stat）のデータを加工して作成。これらは農業全体の値で、みかん固有ではありません。使用した統計表の正式名称・ID・期間は、各指標の「データについて」に記載。<br>
     地図境界：<a href="https://github.com/dataofjapan/land" target="_blank" rel="noopener">dataofjapan/land</a>（地球地図日本／国土地理院）。ブランド産地は公開情報に基づく参考表示です。
   </footer>
 </div>
@@ -843,7 +846,7 @@ function inferCat(ds){
 }
 const CATLABEL={production:"生産",market:"市場",labor:"担い手",consumer:"消費・価格"};
 /* このページに出す種別。市場・担い手ページでは production 以外に差し替える */
-const PAGE_CATS=["production"];
+const PAGE_CATS=["labor"];
 const DATASETS = EXTERNAL.filter(d=>PAGE_CATS.indexOf(inferCat(d))>=0);
 
 const RAMP_ORANGE=["#FCE7BE","#FBD487","#F6B042","#EE8418","#D75F11","#B5400C","#7F2B0B"];
