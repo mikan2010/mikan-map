@@ -4,6 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>みかんと柑橘の産地 ｜ 都道府県マップ</title>
+<meta name="description" content="温州みかん・柑橘の収穫量・出荷量・結果樹面積・単収を都道府県別に塗り分けた地図。年次スライダーで産地の移り変わりをたどれます。政府統計（e-Stat／作物統計調査）に基づく。">
+<meta name="keywords" content="みかん,温州みかん,柑橘,みかん 産地,都道府県,ランキング,地図,統計,e-Stat,収穫量,出荷量,卸売価格,小売価格,家計消費">
+<link rel="canonical" href="https://mikan2010.github.io/mikan-map/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:site_name" content="みかん・柑橘の産地マップ">
+<meta property="og:title" content="みかんと柑橘の産地マップ｜都道府県別ランキング">
+<meta property="og:description" content="温州みかん・柑橘の収穫量・出荷量・結果樹面積・単収を都道府県別に塗り分けた地図。年次スライダーで産地の移り変わりをたどれます。政府統計（e-Stat／作物統計調査）に基づく。">
+<meta property="og:url" content="https://mikan2010.github.io/mikan-map/">
+<meta property="og:image" content="https://mikan2010.github.io/mikan-map/ogp.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="みかんと柑橘の産地マップ｜都道府県別ランキング">
+<meta name="twitter:description" content="温州みかん・柑橘の収穫量・出荷量・結果樹面積・単収を都道府県別に塗り分けた地図。年次スライダーで産地の移り変わりをたどれます。政府統計（e-Stat／作物統計調査）に基づく。">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"みかん・柑橘の産地マップ","inLanguage":"ja","url":"https://mikan2010.github.io/mikan-map/","description":"温州みかん・柑橘の収穫量・出荷量・結果樹面積・単収を都道府県別に塗り分けた地図。年次スライダーで産地の移り変わりをたどれます。政府統計（e-Stat／作物統計調査）に基づく。"}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
@@ -971,7 +985,13 @@ function render(){
   buildLegend(); buildRank(ranked);
   const ds=DATASETS[state.dsIdx], y=ds.years[state.timeIdx];
   document.getElementById("rankUnit").textContent=state.label+"（"+state.unit+"）";
-  document.getElementById("varNote").textContent=ds.note||"";
+  (function(){
+    const vn=document.getElementById("varNote"); let note=ds.note||"";
+    if(/加重平均/.test(state.label||"")||/加重平均/.test(note)){
+      note += (note?"　":"")+"※「数量加重平均」＝取扱量の多い市場ほど強く反映した平均で、単純平均より実際の取引実勢に近い値です。";
+    }
+    vn.textContent=note;
+  })();
   document.getElementById("headstat").innerHTML=`<b>${state.national}</b><span>${ds.name.replace(/（.*）/,"")}・${y}${ds.suffix||""}・${state.label}</span>`;
   buildDataTag();
 }
