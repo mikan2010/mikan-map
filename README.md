@@ -131,6 +131,5 @@ HTML 4ページは外部依存を最小化するため、Leaflet と都道府県
 - **統計データ**：政府統計の総合窓口（e-Stat）。各府省の統計を [政府標準利用規約（第2.0版）](https://www.e-stat.go.jp/terms-of-use) に従い、出典を明記して利用・加工しています。
 - **地図データ**：[dataofjapan/land](https://github.com/dataofjapan/land)（都道府県 GeoJSON）。非商用利用・要クレジット。
 - **ライブラリ等**：[Leaflet](https://leafletjs.com/)、[Google Fonts](https://fonts.google.com/)（Zen Kaku Gothic New / Shippori Mincho B1）。
-- 本リポジトリのコード（スクリプト・HTML）のライセンスは、必要に応じて追記してください（例：MIT）。
 
 ※ 数値はいずれも出典の政府統計を加工して作成したものであり、正確な値は各出典の原典をご確認ください。
