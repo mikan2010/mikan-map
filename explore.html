@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>産地と品種をくらべる ｜ みかん・柑橘マップ</title>
+<meta name="description" content="温州みかん以外の中晩柑97品種を、産地（都道府県）×品種のマトリクスで横並びに。品種ごとの比較や、品種構成（収穫量シェア）、産地ごとの深掘りができます。特産果樹生産動態等調査（e-Stat, 2021）に基づく。">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="canonical" href="https://mikan2010.github.io/mikan-map/explore.html">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:site_name" content="みかん・柑橘の産地マップ">
+<meta property="og:title" content="産地と品種をくらべる ｜ みかん・柑橘マップ">
+<meta property="og:description" content="中晩柑97品種を産地×品種のマトリクスで横並びに。品種比較・品種構成・産地の深掘り。特産果樹生産動態等調査（e-Stat, 2021）。">
+<meta property="og:url" content="https://mikan2010.github.io/mikan-map/explore.html">
+<meta property="og:image" content="https://mikan2010.github.io/mikan-map/ogp.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#FBFAF6;--panel:#FFFFFF;--sea:#F2EFE6;--ink:#2A2722;--muted:#8C8576;--hair:#E7E2D6;
+    --leaf:#3F7A3D;--peel:#C2410C;--nodata:#E7E3D9;
+    --shadow:0 1px 2px rgba(60,45,20,.06),0 8px 24px rgba(60,45,20,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Zen Kaku Gothic New",system-ui,sans-serif;line-height:1.6}
+  .wrap{max-width:1120px;margin:0 auto;padding:18px 16px 60px}
+  .topnav{display:flex;gap:14px;align-items:center;flex-wrap:wrap;font-size:13px;font-weight:700;margin-bottom:8px}
+  .topnav a{color:var(--muted);text-decoration:none;padding:5px 11px;border:1px solid var(--hair);border-radius:999px}
+  .topnav a.here{color:#fff;background:var(--peel);border-color:var(--peel)}
+  .eyebrow{font-size:12px;letter-spacing:.04em;color:var(--peel);font-weight:700;margin:6px 0 2px}
+  h1{font-family:"Shippori Mincho B1",serif;font-weight:700;font-size:clamp(24px,5vw,38px);margin:.1em 0 .2em}
+  .lede{color:#5c564c;max-width:70ch;margin:.2em 0 1em}
+  .seg{display:inline-flex;border:1px solid var(--hair);border-radius:999px;overflow:hidden;background:#fff}
+  .seg button{border:0;background:#fff;color:var(--muted);font:inherit;font-weight:700;font-size:13px;padding:7px 14px;cursor:pointer}
+  .seg button.on{background:var(--peel);color:#fff}
+  .sech{font-family:"Shippori Mincho B1",serif;font-weight:700;font-size:clamp(18px,3vw,24px);margin:34px 0 4px}
+  .sech .n{font-size:12px;color:var(--muted);font-weight:500;font-family:"Zen Kaku Gothic New";margin-left:8px}
+  .card{background:var(--panel);border:1px solid var(--hair);border-radius:14px;box-shadow:var(--shadow);padding:15px 16px;margin-top:12px}
+  .card h3{margin:0 0 8px;font-size:15px}
+  .sub{font-size:12.5px;color:var(--muted);margin:2px 0 10px}
+  .src{font-size:11.5px;color:var(--muted);margin:10px 0 0;border-top:1px dashed var(--hair);padding-top:8px;line-height:1.6}
+  /* matrix */
+  .mwrap{overflow:auto;max-height:560px;border:1px solid var(--hair);border-radius:12px;background:#fff;margin-top:10px}
+  table.mx{border-collapse:separate;border-spacing:0;font-size:11.5px}
+  table.mx th,table.mx td{padding:4px 6px;white-space:nowrap;text-align:right}
+  table.mx thead th{position:sticky;top:0;z-index:3;background:#fff;border-bottom:1px solid var(--hair);cursor:pointer;font-weight:700;text-align:center;color:#5c564c}
+  table.mx thead th.cn{vertical-align:bottom}
+  table.mx tbody th{position:sticky;left:0;z-index:2;background:#fff;border-right:1px solid var(--hair);text-align:left;cursor:pointer;font-weight:700;color:#5c564c}
+  table.mx th.corner{position:sticky;left:0;top:0;z-index:4}
+  table.mx td{border-bottom:1px solid #f3efe6;color:#3a352e}
+  table.mx tr.sel th, table.mx td.selc{outline:2px solid var(--peel);outline-offset:-2px}
+  table.mx th.selcol{color:var(--peel)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  .bar{display:flex;align-items:center;gap:8px;margin:3px 0;font-size:12.5px}
+  .bar .nm{width:104px;flex:none;color:#3a352e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar .tk{flex:1;background:var(--sea);border-radius:5px;overflow:hidden;height:15px}
+  .bar .tk>i{display:block;height:100%;border-radius:5px}
+  .bar .vv{width:78px;flex:none;text-align:right;color:#6a645a;font-variant-numeric:tabular-nums}
+  .kpis{display:flex;gap:16px;flex-wrap:wrap;margin:2px 0 8px}
+  .kpi{font-size:12px;color:var(--muted)} .kpi b{display:block;font-size:18px;color:var(--ink);font-family:"Shippori Mincho B1",serif}
+  .cities{font-size:11.5px;color:var(--muted);margin-top:6px}
+  .axis{stroke:#d8d2c6;stroke-width:1} .axisText{fill:#8C8576;font-size:11px;font-family:"Zen Kaku Gothic New"}
+  .qline{stroke:#d8d2c6;stroke-dasharray:4 4} .ptlabel{fill:#5c564c;font-size:10.5px}
+  .legend{font-size:11.5px;color:var(--muted);margin:8px 0 0}
+  .stack{display:flex;height:30px;border-radius:7px;overflow:hidden;border:1px solid var(--hair)}
+  .stack>span{display:block;height:100%}
+  .stleg{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:8px;font-size:12px}
+  .stleg i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  .foot{margin-top:34px;font-size:11.5px;color:var(--muted);border-top:1px solid var(--hair);padding-top:12px}
+  a{color:var(--peel)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="topnav">
+    <a href="index.html">産地マップ</a>
+    <a href="market.html">市場</a>
+    <a href="labor.html">担い手</a>
+    <a href="analyst.html">分析</a>
+    <a href="explore.html" class="here">品種</a>
+  </nav>
+  <div class="eyebrow">e-Stat ／ 農林水産省 特産果樹生産動態等調査（2021）</div>
+  <h1>産地と品種をくらべる</h1>
+  <p class="lede">温州みかん以外の<strong>中晩柑97品種</strong>を、産地（都道府県）×品種のマトリクスで横並びに見るページです。マスにマウスを乗せると数値と主要産地が出ます。<strong>列（品種）や行（産地）をクリック</strong>すると、下に品種カルテと産地カルテが並びます。指標は収穫量・栽培面積・出荷量で切り替えられます。温州みかんは規模が別格（作物統計で約56万t）なので、ここでは中晩柑の多様性に絞っています。</p>
+
+  <div class="seg" id="measSeg" role="tablist">
+    <button data-m="harvest" class="on">収穫量</button>
+    <button data-m="area">栽培面積</button>
+    <button data-m="ship">出荷量</button>
+  </div>
+
+  <div class="mwrap" id="matrix"></div>
+  <p class="legend" id="mxLegend"></p>
+
+  <div class="grid2">
+    <div class="card" id="prefCard"></div>
+    <div class="card" id="varCard"></div>
+  </div>
+
+  <h2 class="sech">品種をくらべる<span class="n">横=栽培面積、縦=単収（収穫量÷面積）、円=収穫量</span></h2>
+  <div class="card" id="cmpCard"></div>
+
+  <h2 class="sech">品種全体の分布<span class="n">中晩柑の収穫量シェア（2021）</span></h2>
+  <div class="card" id="distCard"></div>
+
+  <div class="foot" id="foot"></div>
+</div>
+
+<script src="mikan_data.js"></script>
+<script src="tokusan_data.js"></script>
+<script>
+const PREF=["","北海道","青森県","岩手県","宮城県","秋田県","山形県","福島県","茨城県","栃木県","群馬県","埼玉県","千葉県","東京都","神奈川県","新潟県","富山県","石川県","福井県","山梨県","長野県","岐阜県","静岡県","愛知県","三重県","滋賀県","京都府","大阪府","兵庫県","奈良県","和歌山県","鳥取県","島根県","岡山県","広島県","山口県","徳島県","香川県","愛媛県","高知県","福岡県","佐賀県","長崎県","熊本県","大分県","宮崎県","鹿児島県","沖縄県"];
+const T = window.TOKUSAN || null;
+const ALL = Array.isArray(window.MIKAN_DATA)?window.MIKAN_DATA:[];
+const MLAB = {harvest:"収穫量",area:"栽培面積",ship:"出荷量",proc:"加工向け"};
+const MUNIT = {harvest:"t",area:"ha",ship:"t",proc:"t"};
+const NCOLS = 20;            // マトリクスに出す品種数（収穫量上位）
+const state = {measure:"harvest", pid:"30", vidx:0};
+
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt=(n,d=0)=> (n==null||isNaN(n))?"–":Number(n).toLocaleString("ja-JP",{maximumFractionDigits:d});
+const peel=a=>`rgba(194,65,12,${a})`;
+function median(a){a=a.filter(x=>x!=null&&!isNaN(x)).slice().sort((x,y)=>x-y);if(!a.length)return 0;const m=a.length>>1;return a.length%2?a[m]:(a[m-1]+a[m])/2;}
+function val(v,pid,m){const r=v.pref[pid];return r?r[m]:null;}
+
+/* ---------- マトリクス ---------- */
+function topVarieties(m){
+  return T.varieties.map((v,i)=>({v,i,t:v.total[m]||0})).sort((a,b)=>b.t-a.t).slice(0,NCOLS);
+}
+function rowsForCols(cols,m){
+  const sums={};
+  for(let pid=1;pid<=47;pid++){let s=0,any=false;cols.forEach(c=>{const x=val(c.v,String(pid),m);if(x!=null){s+=x;any=true;}});if(any)sums[pid]=s;}
+  return Object.keys(sums).map(Number).sort((a,b)=>sums[b]-sums[a]);
+}
+function renderMatrix(){
+  const m=state.measure, cols=topVarieties(m), rows=rowsForCols(cols,m);
+  const colMax={}; cols.forEach(c=>{let mx=0;rows.forEach(pid=>{const x=val(c.v,String(pid),m);if(x>mx)mx=x;});colMax[c.i]=mx||1;});
+  let h='<table class="mx"><thead><tr><th class="corner">指標：'+MLAB[m]+'</th>';
+  cols.forEach(c=>{ h+=`<th class="cn${c.i===state.vidx?' selcol':''}" data-vi="${c.i}" title="${esc(c.v.name)}">${esc(c.v.short)}</th>`; });
+  h+='</tr></thead><tbody>';
+  rows.forEach(pid=>{
+    const sel = String(pid)===state.pid;
+    h+=`<tr class="${sel?'sel':''}"><th data-pid="${pid}">${esc(PREF[pid])}</th>`;
+    cols.forEach(c=>{
+      const x=val(c.v,String(pid),m);
+      if(x==null){ h+='<td></td>'; return; }
+      const a=0.10+0.85*(x/colMax[c.i]);
+      const ttl=`${PREF[pid]} × ${c.v.short}：${MLAB[m]} ${fmt(x,1)}${MUNIT[m]}`+(c.v.pref[String(pid)].cities?`／主要産地 ${c.v.pref[String(pid)].cities}`:"");
+      const isc = sel || c.i===state.vidx;
+      h+=`<td class="${isc?'selc':''}" style="background:${peel(a)};color:${a>0.62?'#fff':'#3a352e'}" title="${esc(ttl)}">${fmt(x,0)}</td>`;
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  document.getElementById("matrix").innerHTML=h;
+  document.getElementById("mxLegend").innerHTML=`色が濃いほど多い（品種ごとに最大値を基準に正規化）。収穫量上位${cols.length}品種 × ${rows.length}産地を表示。単位：${MUNIT[m]}。出典：${esc(T.source)}〔${esc(T.table)}・${esc(T.period)}〕`;
+  // クリック
+  document.querySelectorAll('table.mx thead th[data-vi]').forEach(el=>el.onclick=()=>{state.vidx=+el.dataset.vi;renderAll();});
+  document.querySelectorAll('table.mx tbody th[data-pid]').forEach(el=>el.onclick=()=>{state.pid=el.dataset.pid;renderAll();});
+}
+
+/* ---------- 産地カルテ ---------- */
+function unshuDS(){ return ALL.find(d=>(d.measures||[]).indexOf("harvest")>=0 && /温州/.test(d.name||"")); }
+function unshuTrendSVG(pid){
+  const d=unshuDS(); if(!d) return '<div class="sub">温州みかんの長期データ（作物統計）が読み込まれていません。</div>';
+  const ys=(d.years||[]).slice(); const pts=ys.map(y=>{const v=d.data.harvest&&d.data.harvest[y]?d.data.harvest[y][pid]:null;return v==null?null:+v;});
+  if(!pts.some(v=>v!=null)) return '<div class="sub">この県は温州みかんの長期データに値がありません。</div>';
+  const W=440,H=150,L=44,R=10,Tp=10,B=24;
+  const mx=Math.max(...pts.filter(v=>v!=null)); const sx=i=>L+(W-L-R)*(i/(ys.length-1||1)); const sy=v=>Tp+(H-Tp-B)*(1-v/(mx||1));
+  let path="",dots=""; let started=false;
+  pts.forEach((v,i)=>{ if(v==null){started=false;return;} path+=(started?" L":"M")+sx(i).toFixed(1)+" "+sy(v).toFixed(1); started=true; });
+  const last=pts.map((v,i)=>[v,i]).filter(p=>p[0]!=null).pop();
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="温州みかん収穫量の推移">`;
+  s+=`<line class="axis" x1="${L}" y1="${H-B}" x2="${W-R}" y2="${H-B}"/>`;
+  [0,Math.round(mx/2),Math.round(mx)].forEach((g,k)=>{const yy=sy(g);s+=`<text class="axisText" x="${L-6}" y="${yy+3}" text-anchor="end">${fmt(g)}</text>`;});
+  [0,Math.floor((ys.length-1)/2),ys.length-1].forEach(i=>{if(i>=0)s+=`<text class="axisText" x="${sx(i)}" y="${H-8}" text-anchor="middle">${esc((ys[i]||"").replace("年",""))}</text>`;});
+  s+=`<path d="${path}" fill="none" stroke="var(--peel)" stroke-width="2"/>`;
+  if(last) s+=`<circle cx="${sx(last[1]).toFixed(1)}" cy="${sy(last[0]).toFixed(1)}" r="3.5" fill="var(--peel)"/>`;
+  return s+`</svg>`;
+}
+function renderPref(){
+  const pid=state.pid, m=state.measure;
+  const list=T.varieties.map(v=>({v,x:val(v,pid,m),h:val(v,pid,"harvest")})).filter(o=>o.x!=null).sort((a,b)=>b.x-a.x);
+  const totH=list.reduce((s,o)=>s+(o.h||0),0);
+  let bars="";
+  const top=list.slice(0,10); const mx=Math.max(1,...top.map(o=>o.x));
+  top.forEach(o=>{ const cm=o.v.pref[pid].cities||""; bars+=`<div class="bar"><span class="nm" title="${esc(o.v.name)}">${esc(o.v.short)}</span><span class="tk"><i style="width:${(100*o.x/mx).toFixed(1)}%;background:var(--peel)"></i></span><span class="vv">${fmt(o.x,1)} ${MUNIT[m]}</span></div>`; });
+  const cityTop = list.length?(list[0].v.pref[pid].cities||""):"";
+  document.getElementById("prefCard").innerHTML=
+    `<h3>産地カルテ：${esc(PREF[pid])} <span class="sub" style="font-weight:400">（行をクリックで切替）</span></h3>
+     <div class="kpis"><div class="kpi">中晩柑 品種数<b>${list.length}</b></div><div class="kpi">中晩柑 収穫量計<b>${fmt(totH,0)} t</b></div></div>
+     <div class="sub" style="margin-top:6px">温州みかんの収穫量の推移（作物統計）</div>
+     ${unshuTrendSVG(pid)}
+     <div class="sub" style="margin-top:10px">この県の中晩柑（${MLAB[m]}上位）</div>
+     ${bars||'<div class="sub">この県は中晩柑の記録がありません。</div>'}
+     ${cityTop?`<div class="cities">主要産地（${esc(list[0].v.short)}）：${esc(cityTop)}</div>`:""}
+     <p class="src">出典：${esc(T.source)}〔${esc(T.table)}・${esc(T.period)}〕。温州みかんの推移は作物統計（mikan_data.js）。</p>`;
+}
+
+/* ---------- 品種カルテ ---------- */
+function renderVar(){
+  const v=T.varieties[state.vidx], m=state.measure;
+  const entries=Object.keys(v.pref).map(pid=>({pid,x:v.pref[pid][m],h:v.pref[pid].harvest})).filter(o=>o.x!=null).sort((a,b)=>b.x-a.x);
+  const top=entries.slice(0,10); const mx=Math.max(1,...top.map(o=>o.x));
+  let bars="";
+  top.forEach(o=>{bars+=`<div class="bar"><span class="nm">${esc(PREF[o.pid])}</span><span class="tk"><i style="width:${(100*o.x/mx).toFixed(1)}%;background:var(--peel)"></i></span><span class="vv">${fmt(o.x,1)} ${MUNIT[m]}</span></div>`;});
+  const yld=(v.total.harvest&&v.total.area)?(v.total.harvest/v.total.area):null;
+  const pr=(v.total.proc&&v.total.harvest)?(100*v.total.proc/v.total.harvest):null;
+  const cityTop = entries.length?(v.pref[entries[0].pid].cities||""):"";
+  document.getElementById("varCard").innerHTML=
+    `<h3>品種カルテ：${esc(v.short)} <span class="sub" style="font-weight:400">${esc(v.name)}</span></h3>
+     <div class="kpis">
+       <div class="kpi">全国収穫量<b>${fmt(v.total.harvest,0)} t</b></div>
+       <div class="kpi">産地数<b>${entries.length}</b></div>
+       <div class="kpi">単収<b>${yld==null?"–":fmt(yld,1)} t/ha</b></div>
+       <div class="kpi">加工向け率<b>${pr==null?"–":fmt(pr,1)+"%"}</b></div>
+     </div>
+     <div class="sub">産地（${MLAB[m]}上位）</div>
+     ${bars||'<div class="sub">産地データがありません。</div>'}
+     ${cityTop?`<div class="cities">主要産地（${esc(PREF[entries[0].pid])}）：${esc(cityTop)}</div>`:""}
+     <p class="src">出典：${esc(T.source)}〔${esc(T.table)}・${esc(T.period)}〕</p>`;
+}
+
+/* ---------- 品種比較（散布図） ---------- */
+function renderCompare(){
+  const pts=T.varieties.filter(v=>v.total.area&&v.total.harvest).map(v=>({name:v.short,a:v.total.area,y:v.total.harvest/v.total.area,h:v.total.harvest}));
+  const W=920,H=420,L=54,R=18,Tp=14,B=44;
+  const maxA=Math.max(...pts.map(p=>p.a))*1.05, maxY=Math.max(...pts.map(p=>p.y))*1.05;
+  const sx=a=>L+(W-L-R)*(a/maxA), sy=y=>Tp+(H-Tp-B)*(1-y/maxY);
+  const maxH=Math.max(...pts.map(p=>p.h)); const rr=h=>4+18*Math.sqrt(h/maxH);
+  const mA=median(pts.map(p=>p.a)), mY=median(pts.map(p=>p.y));
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="品種の規模と単収">`;
+  s+=`<line class="axis" x1="${L}" y1="${H-B}" x2="${W-R}" y2="${H-B}"/><line class="axis" x1="${L}" y1="${Tp}" x2="${L}" y2="${H-B}"/>`;
+  for(let i=0;i<=4;i++){const ax=maxA*i/4, yy=maxY*i/4; s+=`<text class="axisText" x="${sx(ax)}" y="${H-B+16}" text-anchor="middle">${fmt(ax)}</text>`; s+=`<text class="axisText" x="${L-8}" y="${sy(yy)+3}" text-anchor="end">${fmt(yy,1)}</text>`;}
+  s+=`<line class="qline" x1="${sx(mA).toFixed(1)}" y1="${Tp}" x2="${sx(mA).toFixed(1)}" y2="${H-B}"/><line class="qline" x1="${L}" y1="${sy(mY).toFixed(1)}" x2="${W-R}" y2="${sy(mY).toFixed(1)}"/>`;
+  const lab=pts.slice().sort((a,b)=>b.h-a.h).slice(0,12).map(p=>p.name);
+  pts.forEach(p=>{ s+=`<circle cx="${sx(p.a).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="${rr(p.h).toFixed(1)}" fill="${peel(0.45)}" stroke="var(--peel)" stroke-width="1"><title>${esc(p.name)}：面積 ${fmt(p.a)}ha・単収 ${fmt(p.y,1)}t/ha・収穫量 ${fmt(p.h)}t</title></circle>`;
+    if(lab.includes(p.name)) s+=`<text class="ptlabel" x="${sx(p.a).toFixed(1)}" y="${(sy(p.y)-rr(p.h)-3).toFixed(1)}" text-anchor="middle">${esc(p.name)}</text>`; });
+  s+=`<text class="axisText" x="${(L+W-R)/2}" y="${H-4}" text-anchor="middle">栽培面積（ha）</text>`;
+  s+=`<text class="axisText" transform="translate(14 ${(Tp+H-B)/2}) rotate(-90)" text-anchor="middle">単収（t/ha）</text>`;
+  s+=`</svg>`;
+  document.getElementById("cmpCard").innerHTML=
+    `<h3>規模 × 効率（中晩柑）</h3>
+     <p class="sub">右ほど作付け面積が大きく、上ほど単位面積あたりの収穫量（単収）が高い品種。円の大きさは全国収穫量。点線は中央値。</p>${s}
+     <p class="src">出典：${esc(T.source)}〔${esc(T.table)}・${esc(T.period)}〕。単収＝収穫量÷栽培面積。</p>`;
+}
+
+/* ---------- 品種分布（構成バー） ---------- */
+function renderDist(){
+  const arr=T.varieties.map(v=>({name:v.short,h:v.total.harvest||0})).sort((a,b)=>b.h-a.h);
+  const N=12, top=arr.slice(0,N), rest=arr.slice(N).reduce((s,o)=>s+o.h,0);
+  const total=arr.reduce((s,o)=>s+o.h,0);
+  const segs=top.concat(rest>0?[{name:"その他",h:rest}]:[]);
+  const cols=["#C2410C","#D9600F","#E8801F","#F0A03A","#9C3412","#B45309","#7C4A03","#D98324","#A85B2B","#C98A3A","#8C5A2B","#E0A95E","#BDB3A0"];
+  let stack='<div class="stack">';
+  segs.forEach((o,i)=>{stack+=`<span title="${esc(o.name)} ${fmt(o.h)}t（${fmt(100*o.h/total,1)}%）" style="width:${(100*o.h/total).toFixed(2)}%;background:${cols[i%cols.length]}"></span>`;});
+  stack+='</div>';
+  let leg='<div class="stleg">';
+  segs.forEach((o,i)=>{leg+=`<span><i style="background:${cols[i%cols.length]}"></i>${esc(o.name)} ${fmt(100*o.h/total,1)}%</span>`;});
+  leg+='</div>';
+  const unshu=unshuDS(); let refNote="";
+  if(unshu){ const ly=unshu.years[unshu.years.length-1]; const nat=unshu.national&&unshu.national.harvest?unshu.national.harvest[ly]:null;
+    if(nat) refNote=`参考：温州みかん（作物統計 ${esc(ly)}）の全国収穫量は約 ${fmt(Math.round(nat/1000)*1000)} t で、ここに示す中晩柑全体（${fmt(total)} t）の約${fmt(nat/total,1)}倍です。`; }
+  document.getElementById("distCard").innerHTML=
+    `<h3>品種構成（収穫量シェア・中晩柑）</h3>
+     <p class="sub">中晩柑全体の収穫量を品種別に分解。不知火・夏みかん・八朔・伊予柑などで大半を占めます。${refNote}</p>
+     ${stack}${leg}
+     <p class="src">出典：${esc(T.source)}〔${esc(T.table)}・${esc(T.period)}〕${unshu?"／温州みかんの参考値は作物統計（mikan_data.js）":""}</p>`;
+}
+
+function renderAll(){ renderMatrix(); renderPref(); renderVar(); }
+
+function init(){
+  const foot=document.getElementById("foot");
+  if(!T||!T.varieties||!T.varieties.length){
+    document.getElementById("matrix").innerHTML='<div class="sub" style="padding:16px">品種データ（tokusan_data.js）が読み込まれていません。`build_explore.py` で生成し、同じ階層に置いてください。</div>';
+    ["prefCard","varCard","cmpCard","distCard"].forEach(id=>document.getElementById(id).innerHTML="");
+    return;
+  }
+  document.querySelectorAll('#measSeg button').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('#measSeg button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); state.measure=b.dataset.m; renderAll();
+  });
+  renderAll(); renderCompare(); renderDist();
+  foot.innerHTML=`出典：${esc(T.source)}「${esc(T.table)}」（政府統計の総合窓口 e-Stat、${esc(T.period)}）を加工して作成。温州みかんを除く中晩柑${T.varieties.length}品種。温州みかんの推移・参考値は農林水産省「作物統計調査」。地図・他指標は<a href="index.html">産地マップ</a>等を参照。`;
+}
+init();
+</script>
+</body>
+</html>
