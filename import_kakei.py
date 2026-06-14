@@ -136,7 +136,7 @@ def build(path, sheet, item, name):
             natQ = num(df.iat[r, q_col]); natE = num(df.iat[r, k_col]); break
 
     ds = {
-        "key": "kakei_" + re.sub(r"[^0-9A-Za-zぁ-んァ-ヶ一-龠]+", "", name)[:20],
+        "key": "kakei_" + re.sub(r"[^0-9A-Za-zぁ-んァ-ヶ一-龠]+", "", item)[:12],
         "name": name, "suffix": "",
         "category": "consumer",
         "measures": ["buy_qty", "spend"],
@@ -145,7 +145,7 @@ def build(path, sheet, item, name):
         "years": [year],
         "data": {"buy_qty": {year: qty}, "spend": {year: exp}},
         "national": {"buy_qty": {year: natQ}, "spend": {year: natE}},
-        "note": "二人以上の世帯・1世帯当たり年間。都道府県庁所在市の値を各県に割り当て（政令指定都市・地方ブロック・全国は除外）。家計の購入であり、産地ではなく消費側の指標です。",
+        "note": "【値は都道府県庁所在市のもの（県全体の平均ではない）】二人以上の世帯・1世帯当たり年間。都道府県庁所在市の値を各県に割り当て（政令指定都市・地方ブロック・全国は除外）。家計の購入であり、産地ではなく消費側の指標です。",
         "source": SOURCE,
         "tables": [{"id": os.path.basename(path),
                     "title": "家計調査 品目分類 第6表 都市階級・地方・都道府県庁所在市別 1世帯当たり年間の品目別支出金額・購入数量（二人以上の世帯）／{}シート・{}".format(sheet, item),
@@ -160,7 +160,7 @@ def main():
     ap.add_argument("xls", help="家計調査 第6表のExcel（例: fn0605.xls）")
     ap.add_argument("--sheet", default="果物")
     ap.add_argument("--item", default="みかん")
-    ap.add_argument("--name", default="みかん（家計消費・都市別）")
+    ap.add_argument("--name", default="みかん（家計消費・県庁所在市）")
     ap.add_argument("--emit-js", default=None)
     ap.add_argument("--append", action="store_true")
     a = ap.parse_args()
@@ -172,7 +172,7 @@ def main():
 
     if a.emit_js:
         datasets, meta_block = (load_existing(a.emit_js) if a.append else ([], None))
-        datasets = [d for d in datasets if d.get("key") != ds["key"]]
+        datasets = [d for d in datasets if not str(d.get("key","")).startswith("kakei_")]
         datasets.append(ds)
         write_js(a.emit_js, datasets, meta_block)
         print("HTML用データ: {} に書き出し（データセット {} 件）".format(a.emit_js, len(datasets)))
