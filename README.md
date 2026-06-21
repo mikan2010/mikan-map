@@ -4,7 +4,7 @@
 
 温州みかんと柑橘類の統計を、**都道府県別の塗り分け地図**で見られるサイトです。生産・市場・消費・担い手の各指標を、すべて政府統計の総合窓口 **e-Stat の公式データ**（API またはダウンロードした統計表 Excel）からのみ作成しています（Webスクレイピングは行っていません）。
 
-公開ページ（GitHub Pages）: [https://mikan2010.github.io/mikan-map/]
+公開ページ（GitHub Pages）: [https://mikan2010.github.io/mikan-map/](https://mikan2010.github.io/mikan-map)
 
 
 ---
