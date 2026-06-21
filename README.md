@@ -1,8 +1,11 @@
-# みかん・柑橘の産地マップ（e-Stat 政府統計ベース）
+# みかんアトラス — 日本の柑橘を、地図と統計で。
+
+（e-Stat 政府統計ベース）
 
 温州みかんと柑橘類の統計を、**都道府県別の塗り分け地図**で見られるサイトです。生産・市場・消費・担い手の各指標を、すべて政府統計の総合窓口 **e-Stat の公式データ**（API またはダウンロードした統計表 Excel）からのみ作成しています（Webスクレイピングは行っていません）。
 
-公開ページ（GitHub Pages）:https://mikan2010.github.io/mikan-map/index.html
+公開ページ（GitHub Pages）: `https://mikan2010.github.io/mikan-map/`
+（↑ 公開後にご自身のURLへ置き換えてください）
 
 ---
 
@@ -14,6 +17,8 @@
 | 市場 | `market.html` | 卸売（産地別・消費市場別）と小売価格・家計消費 | オレンジ／青 |
 | 担い手（参考） | `labor.html` | 基幹的農業従事者数・平均年齢（**農業全体**の参考値） | 緑 |
 | 分析 | `analyst.html` | 単収・全国シェア・集中度、規模×効率、担い手とのかけ合わせ、生産×消費 | — |
+| 品種 | `explore.html` | 産地×品種マトリクス、品種カルテ、品種比較（単収など）・品種構成（中晩柑97品種） | オレンジ |
+| 市町村マップ | `origins.html` | 主要産地の市町村をドット表示。選ぶとその市町村の品種が出る | オレンジ |
 
 各ページの上部「**出典・データについて**」に、使用した統計表の正式名称・統計表ID（または Excel ファイル名）・対象期間が全件記載されます。表示している数値はデータ自身に出典が埋め込まれています。
 
@@ -99,15 +104,21 @@ python fetch_estat.py --inspect 0003420453 --grep みかん
 
 ```
 .
-├── index.html            # 産地マップ
+├── index.html            # 産地マップ（都道府県）
 ├── market.html           # 市場（卸売・小売・家計）
 ├── labor.html            # 担い手（参考）
 ├── analyst.html          # 分析
-├── mikan_data.js         # 全データ（各スクリプトが生成・追記）
+├── explore.html          # 品種（産地×品種マトリクス・比較・構成）
+├── origins.html          # 市町村マップ（産地ドット）
+├── mikan_data.js         # 生産・市場・消費・担い手データ
+├── tokusan_data.js       # 中晩柑97品種×都道府県（explore.html 用）
+├── origins_data.js       # 市町村ドット＋品種逆引き（origins.html 用）
 ├── fetch_estat.py        # e-Stat API 取得
 ├── import_tokusan.py     # 特産果樹 Excel 取込（共通関数も提供）
-├── import_wholesale.py   # 卸売市場調査 取込
+├── import_wholesale.py   # 卸売市場調査 取込（産地別／消費市場別）
 ├── import_kakei.py       # 家計調査 Excel 取込
+├── build_explore.py      # 特産果樹 → tokusan_data.js
+├── build_origins.py      # 主要産地の市町村をジオコーディング → origins_data.js
 ├── .gitignore
 └── README.md
 ```
@@ -130,6 +141,8 @@ HTML 4ページは外部依存を最小化するため、Leaflet と都道府県
 
 - **統計データ**：政府統計の総合窓口（e-Stat）。各府省の統計を [政府標準利用規約（第2.0版）](https://www.e-stat.go.jp/terms-of-use) に従い、出典を明記して利用・加工しています。
 - **地図データ**：[dataofjapan/land](https://github.com/dataofjapan/land)（都道府県 GeoJSON）。非商用利用・要クレジット。
+- **市区町村の座標**（市町村マップのドット）：[UG/JapanCityTownHall_lat_long](https://github.com/UG/JapanCityTownHall_lat_long)（市区町村役場の緯度経度、MIT License）。
 - **ライブラリ等**：[Leaflet](https://leafletjs.com/)、[Google Fonts](https://fonts.google.com/)（Zen Kaku Gothic New / Shippori Mincho B1）。
+- 本リポジトリのコード（スクリプト・HTML）のライセンスは、必要に応じて追記してください（例：MIT）。
 
-※ 数値はいずれも出典の政府統計を加工して作成したものであり、正確な値は各出典の原典をご確認ください。
+※ 数値はいずれも出典の政府統計を加工して作成したものであり、加工の責任は本リポジトリの作成者にあります。正確な値は各出典の原典をご確認ください。
